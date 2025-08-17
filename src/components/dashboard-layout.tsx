@@ -19,6 +19,7 @@ import {
   CheckCircle,
   LogOut,
   Settings,
+  UserPlus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
@@ -47,7 +48,8 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
     { href: "/faculty/students", label: "Students", icon: BookUser },
   ],
   admin: [
-    { href: "/admin/dashboard", label: "Approvals", icon: ShieldCheck },
+    { href: "/admin/dashboard", label: "Dashboard", icon: Home },
+    { href: "/admin/create-faculty", label: "Create Faculty", icon: UserPlus },
   ],
 }
 
@@ -155,7 +157,7 @@ export function DashboardLayout({
           </div>
           <div className="flex-1">
             <h1 className="text-xl font-semibold font-headline capitalize">
-              {pathname.split("/").pop()?.replace("-", " ")}
+              {pathname.split("/").pop()?.replace(/-/g, " ")}
             </h1>
           </div>
           <UserNav role={role} />
