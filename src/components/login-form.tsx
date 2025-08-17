@@ -72,7 +72,7 @@ export function LoginForm() {
        <div className="absolute top-8 left-8">
          <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-primary">
             <CheckCircle className="h-8 w-8 text-accent" />
-            <span className="font-headline">EduTrack</span>
+            <span className="font-headline">IDeal</span>
          </Link>
        </div>
       <Card className="w-full max-w-sm">

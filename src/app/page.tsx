@@ -7,7 +7,7 @@ function Logo() {
   return (
     <div className="flex items-center gap-2 text-2xl font-bold text-primary">
       <CheckCircle className="h-8 w-8 text-accent" />
-      <span className="font-headline">EduTrack</span>
+      <span className="font-headline">IDeal</span>
     </div>
   )
 }
@@ -36,7 +36,7 @@ export default function Home() {
               Seamless Attendance, Simplified.
             </h1>
             <p className="mx-auto max-w-[700px] text-muted-foreground md:text-xl mt-4">
-              EduTrack RFID leverages modern technology to automate attendance, providing accurate, real-time data for students and faculty.
+              IDeal RFID leverages modern technology to automate attendance, providing accurate, real-time data for students and faculty.
             </p>
             <div className="mt-8 flex justify-center gap-4">
               <Button size="lg" asChild>
@@ -49,7 +49,7 @@ export default function Home() {
         <section id="features" className="py-16 md:py-24 bg-secondary">
           <div className="container">
             <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold font-headline">Why EduTrack?</h2>
+              <h2 className="text-3xl font-bold font-headline">Why IDeal?</h2>
               <p className="text-muted-foreground mt-2">Discover the features that make attendance effortless.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -117,7 +117,7 @@ export default function Home() {
               Built for the modern campus.
             </p>
           </div>
-          <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} EduTrack RFID. All rights reserved.</p>
+          <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} IDeal RFID. All rights reserved.</p>
         </div>
       </footer>
     </div>

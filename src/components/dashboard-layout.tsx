@@ -88,7 +88,7 @@ function UserNav({ role }: { role: UserRole }) {
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none capitalize">{role}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {auth.currentUser?.email || `${role}@edutrack.com`}
+              {auth.currentUser?.email || `${role}@ideal.com`}
             </p>
           </div>
         </DropdownMenuLabel>
@@ -126,7 +126,7 @@ export function DashboardLayout({
         <SidebarHeader>
           <div className="flex items-center gap-2 text-xl font-semibold text-primary">
             <CheckCircle className="h-7 w-7 text-accent" />
-            <span className="font-headline">EduTrack</span>
+            <span className="font-headline">IDeal</span>
           </div>
         </SidebarHeader>
         <SidebarContent>
