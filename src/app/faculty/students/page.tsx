@@ -21,6 +21,11 @@ import { Fingerprint } from "lucide-react"
 export default function FacultyStudentsPage() {
   const students: Student[] = mockStudents
 
+  const getFullName = (student: Student) => {
+    return `${student.firstName} ${student.middleName || ""} ${student.lastName}`.replace(/\s+/g, ' ');
+  };
+
+
   return (
     <DashboardLayout role="faculty">
       <Card>
@@ -36,6 +41,8 @@ export default function FacultyStudentsPage() {
               <TableRow>
                 <TableHead>Student ID</TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Gender</TableHead>
+                <TableHead>Age</TableHead>
                 <TableHead>RFID Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -43,7 +50,9 @@ export default function FacultyStudentsPage() {
               {students.map((student) => (
                 <TableRow key={student.id}>
                   <TableCell className="font-medium">{student.id}</TableCell>
-                  <TableCell>{student.name}</TableCell>
+                  <TableCell>{getFullName(student)}</TableCell>
+                  <TableCell>{student.gender}</TableCell>
+                  <TableCell>{student.age}</TableCell>
                   <TableCell>
                     <Badge
                       variant={student.rfid ? "secondary" : "outline"}
