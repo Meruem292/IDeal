@@ -66,14 +66,9 @@ export function RegisterForm() {
     }
 
     try {
-      // For student registration, we might want to handle authentication differently.
-      // For now, let's assume we create a user, but they can't log in until approved or something similar.
-      // Or perhaps we should just store their data without creating an auth user yet.
-      // Let's create an auth user for simplicity.
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // The student ID could be the UID or a custom ID. Let's use UID for now.
       await setDoc(doc(db, "students", user.uid), {
         id: user.uid,
         firstName,
@@ -83,14 +78,14 @@ export function RegisterForm() {
         gender,
         birthday,
         address,
-        email, // Storing email in the document as well
+        email, 
         guardian: {
           name: guardianName,
           relationship: guardianRelationship,
           contactNumber: guardianContact,
         },
-        rfid: null, // RFID is registered later
-        status: "active" // Assuming student is active upon registration
+        rfid: null,
+        status: "active" 
       });
 
       toast({
@@ -110,6 +105,30 @@ export function RegisterForm() {
       setIsLoading(false)
     }
   }
+
+  const handleAdminCreation = async () => {
+    setIsLoading(true);
+    try {
+      const adminEmail = "admin@gmail.com";
+      const adminPassword = "admin123";
+      await createUserWithEmailAndPassword(auth, adminEmail, adminPassword);
+      toast({
+        title: "Admin Account Created",
+        description: "The default admin account has been created successfully.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Admin Creation Failed",
+        description: error.code === 'auth/email-already-in-use' 
+          ? "Admin account already exists." 
+          : error.message,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
@@ -187,7 +206,7 @@ export function RegisterForm() {
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="guardian-contact">Contact Number</Label>
-                        <Input id="guardian-contact" placeholder="555-123-4567" required disabled={isLoading} value={guardianContact} onChange={(e) => setGuardianContact(e.target.value)} />
+                        <Input id="guardian-contact" placeholder="+639-123-456-789" required disabled={isLoading} value={guardianContact} onChange={(e) => setGuardianContact(e.target.value)} />
                     </div>
                 </div>
 
@@ -218,6 +237,12 @@ export function RegisterForm() {
             </div>
           </CardFooter>
         </form>
+         <CardFooter className="flex flex-col gap-4">
+            <Button variant="secondary" className="w-full" onClick={handleAdminCreation} disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create Admin Account (One-Time)
+            </Button>
+        </CardFooter>
       </Card>
     </div>
   )
