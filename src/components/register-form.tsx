@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { CheckCircle, Loader2 } from "lucide-react"
@@ -29,6 +29,11 @@ import {
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
+type Barangay = {
+  code: string;
+  name: string;
+}
+
 export function RegisterForm() {
   const { toast } = useToast()
   const router = useRouter()
@@ -50,6 +55,25 @@ export function RegisterForm() {
   const [guardianRelationship, setGuardianRelationship] = useState("")
   const [guardianContact, setGuardianContact] = useState("")
 
+  const [barangays, setBarangays] = useState<Barangay[]>([])
+
+  useEffect(() => {
+    const fetchBarangays = async () => {
+      try {
+        const response = await fetch('https://psgc.gitlab.io/api/cities/012805000/barangays.json');
+        const data = await response.json();
+        setBarangays(data);
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Failed to load addresses",
+          description: "Could not fetch barangay data. Please try again later.",
+        })
+      }
+    };
+    fetchBarangays();
+  }, [toast]);
+
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -60,6 +84,16 @@ export function RegisterForm() {
         variant: "destructive",
         title: "Registration Failed",
         description: "Please select a gender.",
+      })
+      setIsLoading(false)
+      return
+    }
+
+    if (!address) {
+      toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: "Please select an address.",
       })
       setIsLoading(false)
       return
@@ -167,7 +201,18 @@ export function RegisterForm() {
                 
                 <div className="grid gap-2">
                     <Label htmlFor="address">Address</Label>
-                    <Input id="address" placeholder="123 University Ave" required disabled={isLoading} value={address} onChange={(e) => setAddress(e.target.value)} />
+                    <Select onValueChange={setAddress} value={address} disabled={isLoading || barangays.length === 0}>
+                        <SelectTrigger id="address">
+                            <SelectValue placeholder="Select barangay" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {barangays.map((barangay) => (
+                                <SelectItem key={barangay.code} value={barangay.name}>
+                                    {barangay.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 <h3 className="text-lg font-semibold text-primary pt-4">Guardian Information</h3>
