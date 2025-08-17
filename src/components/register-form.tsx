@@ -106,30 +106,6 @@ export function RegisterForm() {
     }
   }
 
-  const handleAdminCreation = async () => {
-    setIsLoading(true);
-    try {
-      const adminEmail = "admin@gmail.com";
-      const adminPassword = "admin123";
-      await createUserWithEmailAndPassword(auth, adminEmail, adminPassword);
-      toast({
-        title: "Admin Account Created",
-        description: "The default admin account has been created successfully.",
-      });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Admin Creation Failed",
-        description: error.code === 'auth/email-already-in-use' 
-          ? "Admin account already exists." 
-          : error.message,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
         <div className="absolute top-8 left-8">
@@ -237,12 +213,6 @@ export function RegisterForm() {
             </div>
           </CardFooter>
         </form>
-         <CardFooter className="flex flex-col gap-4">
-            <Button variant="secondary" className="w-full" onClick={handleAdminCreation} disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Admin Account (One-Time)
-            </Button>
-        </CardFooter>
       </Card>
     </div>
   )
