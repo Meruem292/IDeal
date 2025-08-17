@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -29,7 +30,7 @@ import {
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-type Barangay = {
+type PsgcRecord = {
   code: string;
   name: string;
 }
@@ -46,7 +47,6 @@ export function RegisterForm() {
   const [age, setAge] = useState("")
   const [gender, setGender] = useState<"Male" | "Female" | "Other" | "">("")
   const [birthday, setBirthday] = useState("")
-  const [address, setAddress] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
 
@@ -55,24 +55,91 @@ export function RegisterForm() {
   const [guardianRelationship, setGuardianRelationship] = useState("")
   const [guardianContact, setGuardianContact] = useState("")
 
-  const [barangays, setBarangays] = useState<Barangay[]>([])
+  // Address fields
+  const [regions, setRegions] = useState<PsgcRecord[]>([])
+  const [provinces, setProvinces] = useState<PsgcRecord[]>([])
+  const [cities, setCities] = useState<PsgcRecord[]>([])
+  const [barangays, setBarangays] = useState<PsgcRecord[]>([])
 
+  const [selectedRegion, setSelectedRegion] = useState("")
+  const [selectedProvince, setSelectedProvince] = useState("")
+  const [selectedCity, setSelectedCity] = useState("")
+  const [selectedBarangay, setSelectedBarangay] = useState("")
+
+  // Fetch regions
   useEffect(() => {
-    const fetchBarangays = async () => {
+    const fetchRegions = async () => {
       try {
-        const response = await fetch('https://psgc.gitlab.io/api/cities/012805000/barangays.json');
+        const response = await fetch('https://psgc.gitlab.io/api/regions/');
         const data = await response.json();
-        setBarangays(data);
+        setRegions(data.sort((a: PsgcRecord, b: PsgcRecord) => a.name.localeCompare(b.name)));
       } catch (error) {
         toast({
           variant: "destructive",
           title: "Failed to load addresses",
-          description: "Could not fetch barangay data. Please try again later.",
+          description: "Could not fetch region data.",
         })
       }
     };
-    fetchBarangays();
+    fetchRegions();
   }, [toast]);
+
+  // Fetch provinces when region changes
+  useEffect(() => {
+    if (!selectedRegion) {
+        setProvinces([]);
+        setSelectedProvince('');
+        return;
+    };
+    const fetchProvinces = async () => {
+        try {
+            const response = await fetch(`https://psgc.gitlab.io/api/regions/${selectedRegion}/provinces/`);
+            const data = await response.json();
+            setProvinces(data.sort((a: PsgcRecord, b: PsgcRecord) => a.name.localeCompare(b.name)));
+        } catch (error) {
+            toast({ variant: "destructive", title: "Failed to load provinces" });
+        }
+    };
+    fetchProvinces();
+  }, [selectedRegion, toast]);
+
+  // Fetch cities/municipalities when province changes
+  useEffect(() => {
+    if (!selectedProvince) {
+        setCities([]);
+        setSelectedCity('');
+        return;
+    };
+    const fetchCities = async () => {
+        try {
+            const response = await fetch(`https://psgc.gitlab.io/api/provinces/${selectedProvince}/cities-municipalities/`);
+            const data = await response.json();
+            setCities(data.sort((a: PsgcRecord, b: PsgcRecord) => a.name.localeCompare(b.name)));
+        } catch (error) {
+            toast({ variant: "destructive", title: "Failed to load cities/municipalities" });
+        }
+    };
+    fetchCities();
+  }, [selectedProvince, toast]);
+
+    // Fetch barangays when city/municipality changes
+  useEffect(() => {
+    if (!selectedCity) {
+        setBarangays([]);
+        setSelectedBarangay('');
+        return;
+    };
+    const fetchBarangays = async () => {
+        try {
+            const response = await fetch(`https://psgc.gitlab.io/api/cities-municipalities/${selectedCity}/barangays/`);
+            const data = await response.json();
+            setBarangays(data.sort((a: PsgcRecord, b: PsgcRecord) => a.name.localeCompare(b.name)));
+        } catch (error) {
+            toast({ variant: "destructive", title: "Failed to load barangays" });
+        }
+    };
+    fetchBarangays();
+  }, [selectedCity, toast]);
 
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -89,15 +156,22 @@ export function RegisterForm() {
       return
     }
 
-    if (!address) {
+    if (!selectedBarangay) {
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: "Please select an address.",
+        description: "Please select a complete address.",
       })
       setIsLoading(false)
       return
     }
+
+    const fullAddress = [
+        barangays.find(b => b.code === selectedBarangay)?.name,
+        cities.find(c => c.code === selectedCity)?.name,
+        provinces.find(p => p.code === selectedProvince)?.name,
+        regions.find(r => r.code === selectedRegion)?.name,
+    ].filter(Boolean).join(', ');
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -111,7 +185,7 @@ export function RegisterForm() {
         age: parseInt(age, 10),
         gender,
         birthday,
-        address,
+        address: fullAddress,
         email, 
         guardian: {
           name: guardianName,
@@ -199,21 +273,46 @@ export function RegisterForm() {
                     </div>
                 </div>
                 
-                <div className="grid gap-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Select onValueChange={setAddress} value={address} disabled={isLoading || barangays.length === 0}>
-                        <SelectTrigger id="address">
-                            <SelectValue placeholder="Select barangay" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {barangays.map((barangay) => (
-                                <SelectItem key={barangay.code} value={barangay.name}>
-                                    {barangay.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                <h3 className="text-lg font-semibold text-primary pt-4">Address</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="region">Region</Label>
+                        <Select onValueChange={setSelectedRegion} value={selectedRegion} disabled={isLoading || regions.length === 0}>
+                            <SelectTrigger id="region"><SelectValue placeholder="Select region" /></SelectTrigger>
+                            <SelectContent>
+                                {regions.map((region) => (<SelectItem key={region.code} value={region.code}>{region.name}</SelectItem>))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="province">Province</Label>
+                        <Select onValueChange={setSelectedProvince} value={selectedProvince} disabled={isLoading || provinces.length === 0}>
+                            <SelectTrigger id="province"><SelectValue placeholder="Select province" /></SelectTrigger>
+                            <SelectContent>
+                                {provinces.map((province) => (<SelectItem key={province.code} value={province.code}>{province.name}</SelectItem>))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="city">City/Municipality</Label>
+                        <Select onValueChange={setSelectedCity} value={selectedCity} disabled={isLoading || cities.length === 0}>
+                            <SelectTrigger id="city"><SelectValue placeholder="Select city/municipality" /></SelectTrigger>
+                            <SelectContent>
+                                {cities.map((city) => (<SelectItem key={city.code} value={city.code}>{city.name}</SelectItem>))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="barangay">Barangay</Label>
+                        <Select onValueChange={setSelectedBarangay} value={selectedBarangay} disabled={isLoading || barangays.length === 0}>
+                            <SelectTrigger id="barangay"><SelectValue placeholder="Select barangay" /></SelectTrigger>
+                            <SelectContent>
+                                {barangays.map((barangay) => (<SelectItem key={barangay.code} value={barangay.code}>{barangay.name}</SelectItem>))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
+
 
                 <h3 className="text-lg font-semibold text-primary pt-4">Guardian Information</h3>
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
