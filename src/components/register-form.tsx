@@ -101,6 +101,11 @@ export function RegisterForm() {
         }
     };
     fetchProvinces();
+    setSelectedProvince('');
+    setCities([]);
+    setSelectedCity('');
+    setBarangays([]);
+    setSelectedBarangay('');
   }, [selectedRegion, toast]);
 
   // Fetch cities/municipalities when province changes
@@ -120,6 +125,9 @@ export function RegisterForm() {
         }
     };
     fetchCities();
+    setSelectedCity('');
+    setBarangays([]);
+    setSelectedBarangay('');
   }, [selectedProvince, toast]);
 
     // Fetch barangays when city/municipality changes
@@ -139,6 +147,7 @@ export function RegisterForm() {
         }
     };
     fetchBarangays();
+    setSelectedBarangay('');
   }, [selectedCity, toast]);
 
 
@@ -284,33 +293,39 @@ export function RegisterForm() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="province">Province</Label>
-                        <Select onValueChange={setSelectedProvince} value={selectedProvince} disabled={isLoading || provinces.length === 0}>
-                            <SelectTrigger id="province"><SelectValue placeholder="Select province" /></SelectTrigger>
-                            <SelectContent>
-                                {provinces.map((province) => (<SelectItem key={province.code} value={province.code}>{province.name}</SelectItem>))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="grid gap-2">
-                        <Label htmlFor="city">City/Municipality</Label>
-                        <Select onValueChange={setSelectedCity} value={selectedCity} disabled={isLoading || cities.length === 0}>
-                            <SelectTrigger id="city"><SelectValue placeholder="Select city/municipality" /></SelectTrigger>
-                            <SelectContent>
-                                {cities.map((city) => (<SelectItem key={city.code} value={city.code}>{city.name}</SelectItem>))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="grid gap-2">
-                        <Label htmlFor="barangay">Barangay</Label>
-                        <Select onValueChange={setSelectedBarangay} value={selectedBarangay} disabled={isLoading || barangays.length === 0}>
-                            <SelectTrigger id="barangay"><SelectValue placeholder="Select barangay" /></SelectTrigger>
-                            <SelectContent>
-                                {barangays.map((barangay) => (<SelectItem key={barangay.code} value={barangay.code}>{barangay.name}</SelectItem>))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    {selectedRegion && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="province">Province</Label>
+                            <Select onValueChange={setSelectedProvince} value={selectedProvince} disabled={isLoading || provinces.length === 0}>
+                                <SelectTrigger id="province"><SelectValue placeholder="Select province" /></SelectTrigger>
+                                <SelectContent>
+                                    {provinces.map((province) => (<SelectItem key={province.code} value={province.code}>{province.name}</SelectItem>))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    {selectedProvince && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="city">City/Municipality</Label>
+                            <Select onValueChange={setSelectedCity} value={selectedCity} disabled={isLoading || cities.length === 0}>
+                                <SelectTrigger id="city"><SelectValue placeholder="Select city/municipality" /></SelectTrigger>
+                                <SelectContent>
+                                    {cities.map((city) => (<SelectItem key={city.code} value={city.code}>{city.name}</SelectItem>))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    {selectedCity && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="barangay">Barangay</Label>
+                            <Select onValueChange={setSelectedBarangay} value={selectedBarangay} disabled={isLoading || barangays.length === 0}>
+                                <SelectTrigger id="barangay"><SelectValue placeholder="Select barangay" /></SelectTrigger>
+                                <SelectContent>
+                                    {barangays.map((barangay) => (<SelectItem key={barangay.code} value={barangay.code}>{barangay.name}</SelectItem>))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                 </div>
 
 
@@ -361,3 +376,5 @@ export function RegisterForm() {
     </div>
   )
 }
+
+    
