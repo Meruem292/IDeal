@@ -4,6 +4,8 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { CheckCircle, Loader2 } from "lucide-react"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -30,41 +32,39 @@ export function LoginForm() {
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [role, setRole] = useState("")
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
-    setTimeout(() => {
-      if (!role) {
-        toast({
-          variant: "destructive",
-          title: "Login Failed",
-          description: "Please select a role.",
-        })
-        setIsLoading(false)
-        return
-      }
-      
-      const expectedEmail = `${role}@edutrack.com`
-      if (email.toLowerCase() !== expectedEmail) {
-        toast({
-          variant: "destructive",
-          title: "Login Failed",
-          description: `Invalid credentials. Try '${expectedEmail}'.`,
-        })
-        setIsLoading(false)
-        return
-      }
+    if (!role) {
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: "Please select a role.",
+      })
+      setIsLoading(false)
+      return
+    }
 
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
       toast({
         title: "Login Successful",
         description: "Redirecting to your dashboard...",
       })
-
       router.push(`/${role}/dashboard`)
-    }, 1000)
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: error.message,
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -102,7 +102,7 @@ export function LoginForm() {
               <Input
                 id="email"
                 type="email"
-                placeholder="role@edutrack.com"
+                placeholder="name@example.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -115,7 +115,8 @@ export function LoginForm() {
                 id="password" 
                 type="password" 
                 required 
-                defaultValue="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading} 
               />
             </div>

@@ -21,7 +21,7 @@ import {
   Settings,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -31,6 +31,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { auth } from "@/lib/firebase"
+import { signOut } from "firebase/auth"
+import { useToast } from "@/hooks/use-toast"
 
 type UserRole = "student" | "faculty" | "admin"
 
@@ -50,6 +53,26 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
 
 function UserNav({ role }: { role: UserRole }) {
   const profileLink = `/${role}/profile`
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({
+        title: "Logged Out",
+        description: "You have been successfully logged out.",
+      });
+      router.push("/");
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Logout Failed",
+        description: "Something went wrong.",
+      });
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -65,7 +88,7 @@ function UserNav({ role }: { role: UserRole }) {
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none capitalize">{role}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {role}@edutrack.com
+              {auth.currentUser?.email || `${role}@edutrack.com`}
             </p>
           </div>
         </DropdownMenuLabel>
@@ -79,11 +102,9 @@ function UserNav({ role }: { role: UserRole }) {
             </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/">
-            <LogOut className="mr-2 h-4 w-4" />
-            <span>Log out</span>
-          </Link>
+        <DropdownMenuItem onClick={handleLogout}>
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Log out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

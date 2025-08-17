@@ -3,6 +3,10 @@
 import { useState } from "react"
 import Link from "next/link"
 import { CheckCircle, Loader2 } from "lucide-react"
+import { createUserWithEmailAndPassword } from "firebase/auth"
+import { doc, setDoc } from "firebase/firestore"
+import { auth, db } from "@/lib/firebase"
+
 
 import { Button } from "@/components/ui/button"
 import {
@@ -20,18 +24,39 @@ import { useToast } from "@/hooks/use-toast"
 export function RegisterForm() {
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [fullName, setFullName] = useState("")
+  const [department, setDepartment] = useState("")
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
-    setTimeout(() => {
-      setIsLoading(false)
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      await setDoc(doc(db, "faculty", user.uid), {
+        name: fullName,
+        email: email,
+        department: department,
+        status: "pending"
+      });
+
       toast({
         title: "Registration Submitted",
         description: "Your faculty account is pending admin approval.",
       })
-    }, 1500)
+    } catch (error: any) {
+       toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: error.message,
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -53,19 +78,19 @@ export function RegisterForm() {
           <CardContent className="grid gap-4">
              <div className="grid gap-2">
               <Label htmlFor="full-name">Full Name</Label>
-              <Input id="full-name" placeholder="John Doe" required disabled={isLoading} />
+              <Input id="full-name" placeholder="John Doe" required disabled={isLoading} value={fullName} onChange={(e) => setFullName(e.target.value)} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="name@example.com" required disabled={isLoading} />
+              <Input id="email" type="email" placeholder="name@example.com" required disabled={isLoading} value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
              <div className="grid gap-2">
               <Label htmlFor="department">Department</Label>
-              <Input id="department" placeholder="e.g., Computer Science" required disabled={isLoading} />
+              <Input id="department" placeholder="e.g., Computer Science" required disabled={isLoading} value={department} onChange={(e) => setDepartment(e.target.value)} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" required disabled={isLoading} />
+              <Input id="password" type="password" required disabled={isLoading} value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
