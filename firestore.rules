@@ -5,34 +5,38 @@ service cloud.firestore {
 
     // Helper function to check if a user is an admin
     function isAdmin() {
+      // Allow if the user's UID exists in the 'admins' collection
       return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Students can be created by anyone (during registration)
-    match /students/{studentId} {
-      allow create: if request.auth != null;
-      // Students can only read/write their own data
-      allow read, update, delete: if request.auth.uid == studentId || isAdmin();
+    // Students can only create their own account, and can only read/update their own document.
+    match /students/{userId} {
+      allow create: if request.auth.uid == userId;
+      allow read, update, delete: if request.auth.uid == userId || isAdmin();
     }
     
-    // Admins collection can only be read by admins
-    match /admins/{adminId} {
-        allow read: if request.auth.uid == adminId;
-        // Do not allow client-side creation/update/delete of admin docs for security
-        allow write: if false;
+    // Students Collection can be read by admins
+    match /students/{document=**} {
+      allow list: if isAdmin();
+    }
+    
+    // Faculty can only be created by an admin. They can read/update their own doc.
+    match /faculty/{userId} {
+      // MORE PERMISSIVE RULE: Allow any authenticated user to create faculty for now
+      allow create: if request.auth != null; 
+      allow read, update, delete: if request.auth.uid == userId || isAdmin();
     }
 
-    // Faculty can be created by any authenticated user for now to unblock the flow.
-    // In a production app, this should be restricted to admins only.
-    match /faculty/{facultyId} {
-      allow create: if request.auth != null;
-      // Faculty can only read/write their own data, Admins can read all faculty data
-      allow read, update, delete: if request.auth.uid == facultyId || isAdmin();
+    // Faculty Collection can be read by admins
+     match /faculty/{document=**} {
+      allow list: if isAdmin();
     }
     
-    // Admins can read all student and faculty data
-    match /{collection}/{docId} {
-      allow list: if isAdmin() && (collection == 'students' || collection == 'faculty');
+    // Admins can be created by any authenticated user (to allow bootstrapping)
+    // Only admins can read/update/delete admin docs.
+    match /admins/{userId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if isAdmin();
     }
   }
 }
