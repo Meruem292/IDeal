@@ -2,33 +2,39 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check if a user is an admin
+  
+    // Helper function to check for admin role
     function isAdmin() {
       return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Students can create their own profile upon registration
-    // They can only read and write their own data
-    match /students/{studentId} {
-      allow create: if request.auth != null && request.auth.uid == studentId;
-      allow read, write: if request.auth != null && request.auth.uid == studentId;
-      // Admins can read student data
-      allow list, get: if request.auth != null && isAdmin();
-    }
-
-    // Faculty can only be created by an Admin
-    // They can only read and write their own data
-    match /faculty/{facultyId} {
-      allow create: if request.auth != null && isAdmin();
-      allow read, write: if request.auth != null && (request.auth.uid == facultyId || isAdmin());
-      // Admins can list faculty data
-      allow list: if request.auth != null && isAdmin();
+    // Students can create their own account during registration.
+    // They can only read/write their own data afterwards.
+    match /students/{userId} {
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Admins can read and write their own doc
-    match /admins/{adminId} {
-      allow read, write: if request.auth != null && request.auth.uid == adminId;
+    // Admins can read all student data.
+    match /students/{studentId} {
+      allow read: if isAdmin();
+    }
+
+    // Only admins can create faculty accounts.
+    // Faculty can only read/write their own data.
+    match /faculty/{userId} {
+      allow create: if isAdmin();
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Admins can read all faculty data.
+    match /faculty/{facultyId} {
+        allow read: if isAdmin();
+    }
+    
+    // Admins can be created (one-time bootstrap) and can read/write their own doc.
+    match /admins/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

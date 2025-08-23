@@ -1,6 +1,6 @@
 
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import {
   Card,
@@ -15,10 +15,10 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
-import { db } from "@/lib/firebase" 
+import { db, auth } from "@/lib/firebase" 
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth"
-import { doc, setDoc } from "firebase/firestore"
-import { initializeApp, deleteApp } from "firebase/app"
+import { doc, setDoc, getDoc } from "firebase/firestore"
+import { initializeApp, deleteApp }from "firebase/app"
 
 export default function CreateFacultyPage() {
   const [name, setName] = useState("")
@@ -28,15 +28,44 @@ export default function CreateFacultyPage() {
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
+  // One-time check to create the admin document if it doesn't exist
+  useEffect(() => {
+    const bootstrapAdmin = async () => {
+      const currentUser = auth.currentUser;
+      if (currentUser && currentUser.email === 'admin@gmail.com') {
+        const adminDocRef = doc(db, 'admins', currentUser.uid);
+        const adminDoc = await getDoc(adminDocRef);
+        if (!adminDoc.exists()) {
+          try {
+            await setDoc(adminDocRef, {
+              uid: currentUser.uid,
+              email: currentUser.email,
+              role: 'admin'
+            });
+            toast({
+              title: "Admin Initialized",
+              description: "Your admin account has been configured in Firestore.",
+            });
+          } catch (error: any) {
+             toast({
+              variant: "destructive",
+              title: "Admin Init Failed",
+              description: error.message,
+            });
+          }
+        }
+      }
+    };
+    bootstrapAdmin();
+  }, [toast]);
+
+
   const handleCreateFaculty = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
     let secondaryApp;
     try {
-      // To create a new user while an admin is already signed in,
-      // we must initialize a temporary, secondary Firebase app instance.
-      // This provides an independent authentication context.
       const secondaryAppName = `secondary-auth-${Date.now()}`;
       
       const firebaseConfig = {
@@ -54,7 +83,6 @@ export default function CreateFacultyPage() {
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const user = userCredential.user;
 
-      // Now, save the faculty's details to Firestore
       await setDoc(doc(db, "faculty", user.uid), {
         id: user.uid,
         name,
@@ -68,7 +96,6 @@ export default function CreateFacultyPage() {
         description: `Account for ${name} has been created successfully.`,
       })
       
-      // Clear form
       setName("")
       setEmail("")
       setPassword("")
@@ -83,7 +110,6 @@ export default function CreateFacultyPage() {
     } finally {
       setIsLoading(false)
        if (secondaryApp) {
-        // Clean up the temporary app instance
         await deleteApp(secondaryApp);
       }
     }
