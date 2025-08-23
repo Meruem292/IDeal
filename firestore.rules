@@ -1,0 +1,29 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if a user is an admin
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Students can only manage their own profile
+    match /students/{studentId} {
+      allow read, update, delete: if request.auth.uid == studentId;
+      allow create: if request.auth.uid != null;
+    }
+
+    // Faculty can only manage their own profile
+    match /faculty/{facultyId} {
+       allow read, update, delete: if request.auth.uid == facultyId;
+       allow create: if request.auth.uid != null;
+    }
+    
+    // Admins can manage their own profile
+    match /admins/{adminId} {
+      allow read, write: if request.auth.uid == adminId;
+    }
+  }
+}

@@ -15,10 +15,10 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
-import { app, db } from "@/lib/firebase" // Import the main app instance
+import { db } from "@/lib/firebase" 
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth"
 import { doc, setDoc } from "firebase/firestore"
-import { initializeApp, getApps, deleteApp } from "firebase/app"
+import { initializeApp, deleteApp } from "firebase/app"
 
 export default function CreateFacultyPage() {
   const [name, setName] = useState("")
