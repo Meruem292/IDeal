@@ -35,6 +35,8 @@ import {
 import { auth } from "@/lib/firebase"
 import { signOut } from "firebase/auth"
 import { useToast } from "@/hooks/use-toast"
+import { useState, useEffect } from "react"
+import type { User as FirebaseAuthUser } from "firebase/auth"
 
 type UserRole = "student" | "faculty" | "admin"
 
@@ -57,6 +59,14 @@ function UserNav({ role }: { role: UserRole }) {
   const profileLink = `/${role}/profile`
   const router = useRouter();
   const { toast } = useToast();
+  const [user, setUser] = useState<FirebaseAuthUser | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -75,12 +85,19 @@ function UserNav({ role }: { role: UserRole }) {
     }
   };
 
+  const getInitial = () => {
+    if (user?.email) {
+      return user.email.charAt(0).toUpperCase();
+    }
+    return role.charAt(0).toUpperCase();
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-8 w-8">
-            <AvatarFallback>{role.charAt(0).toUpperCase()}</AvatarFallback>
+            <AvatarFallback>{getInitial()}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
@@ -89,7 +106,7 @@ function UserNav({ role }: { role: UserRole }) {
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none capitalize">{role}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {auth.currentUser?.email || `${role}@ideal.com`}
+              {user?.email || `${role}@ideal.com`}
             </p>
           </div>
         </DropdownMenuLabel>
