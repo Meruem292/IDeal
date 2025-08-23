@@ -1,31 +1,27 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if the requesting user is an admin.
     function isAdmin() {
       return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Students: Can create their own record and can only read/write their own data.
     match /students/{userId} {
-      allow read, update, delete: if request.auth.uid == userId;
       allow create: if request.auth.uid == userId;
+      allow read, write: if request.auth.uid == userId || isAdmin();
     }
 
-    // Faculty: Can be created by an admin. Can only read/write their own data.
     match /faculty/{userId} {
-      allow read, update, delete: if request.auth.uid == userId || isAdmin();
       allow create: if isAdmin();
+      allow read, write: if request.auth.uid == userId || isAdmin();
     }
     
-    // Admins: An authenticated user can create their OWN admin document.
-    // This solves the chicken-and-egg problem of needing to be an admin to create the first admin.
-    // Once created, only other admins can read or modify admin documents.
     match /admins/{userId} {
-      allow read, update, delete: if isAdmin();
+      // Allow a user to create their OWN admin document. This is key to bootstrapping the first admin.
       allow create: if request.auth.uid == userId;
+      allow read, write: if request.auth.uid == userId;
     }
   }
 }
