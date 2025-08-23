@@ -64,19 +64,34 @@ export default function CreateFacultyPage() {
     e.preventDefault()
     setIsLoading(true)
 
+    const firebaseConfig = {
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    };
+
+    // Validate that all config values are present
+    const missingConfigKeys = Object.entries(firebaseConfig)
+      .filter(([key, value]) => !value)
+      .map(([key]) => key);
+
+    if (missingConfigKeys.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Configuration Error",
+        description: `Missing Firebase config values for: ${missingConfigKeys.join(", ")}. Please check your .env.local file.`,
+      });
+      setIsLoading(false);
+      return;
+    }
+
+
     let secondaryApp;
     try {
       const secondaryAppName = `secondary-auth-${Date.now()}`;
-      
-      const firebaseConfig = {
-          apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-          authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-          storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-          messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-          appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-      };
-
       secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
       const secondaryAuth = getAuth(secondaryApp);
 
