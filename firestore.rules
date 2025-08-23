@@ -1,33 +1,33 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Students can only be created during registration.
-    match /students/{userId} {
-      allow create: if request.auth != null;
-      allow read, write: if request.auth.uid == userId;
+  
+    // Helper function to check for admin role
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
-
-    // Admins can read all student and faculty data.
+  
+    // Students can create their own account during registration.
+    // They can only read/write their own data after creation.
     match /students/{studentId} {
-      allow read: if get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+      allow create: if request.auth.uid == studentId;
+      allow read, update, delete: if request.auth.uid == studentId || isAdmin();
     }
+    
+    // Faculty can only read/write their own data.
+    // Only an admin can create a faculty account.
     match /faculty/{facultyId} {
-       allow read: if get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+      allow create: if isAdmin();
+      allow read, update, delete: if request.auth.uid == facultyId || isAdmin();
     }
-
-    // Admins can be read by anyone (for rule checks) but only written by themselves.
-    match /admins/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth.uid == userId;
-    }
-
-    // TEMPORARY RULE: Allow any authenticated user to create faculty.
-    // This removes the admin check to unblock creation.
-    match /faculty/{userId} {
-      allow create: if request.auth != null;
-      allow read, write: if request.auth.uid == userId;
+    
+    // Admins can read/write their own data.
+    // Admins can also be created via the bootstrap function in the app.
+    match /admins/{adminId} {
+       allow read, write: if request.auth.uid == adminId;
+       allow create: if request.auth != null; // Allows client-side bootstrap
     }
   }
 }
