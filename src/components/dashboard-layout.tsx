@@ -80,7 +80,6 @@ function UserNav({ role }: { role: UserRole }) {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-8 w-8">
-            <AvatarImage src={`https://i.pravatar.cc/150?u=${role}`} alt="@user" />
             <AvatarFallback>{role.charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
         </Button>
