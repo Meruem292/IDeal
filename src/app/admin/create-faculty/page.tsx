@@ -15,15 +15,16 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
-import { auth, db } from "@/lib/firebase"
-import { createUserWithEmailAndPassword } from "firebase/auth"
+import { app, db } from "@/lib/firebase" // Import the main app instance
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth"
 import { doc, setDoc } from "firebase/firestore"
+import { initializeApp, getApps, deleteApp } from "firebase/app"
 
 export default function CreateFacultyPage() {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [department, setDepartment] = useState("")
+  const [subject, setSubject] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
@@ -31,28 +32,34 @@ export default function CreateFacultyPage() {
     e.preventDefault()
     setIsLoading(true)
 
+    let secondaryApp;
     try {
-      // We can't use the regular auth object because the admin is already signed in.
-      // We need to create a temporary app instance to create a new user.
-      // This is a common pattern for admin panels.
-      // NOTE: This will require a second Firebase app initialization.
-      // For this to work in a real app, you might need a separate admin SDK setup on a backend.
-      // For client-side, this approach is a workaround. A more robust solution would use Cloud Functions.
-
-      // For the purpose of this prototype, we'll simulate the creation without a secondary app.
-      // In a real app, you'd use the Admin SDK on a server to create users.
+      // To create a new user while an admin is already signed in,
+      // we must initialize a temporary, secondary Firebase app instance.
+      // This provides an independent authentication context.
+      const secondaryAppName = `secondary-auth-${Date.now()}`;
       
-      // const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      // const user = userCredential.user;
+      const firebaseConfig = {
+          apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+          authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+          storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+          messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+          appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+      };
 
-      // Mocking user creation for now
-      const mockUserId = `faculty_${new Date().getTime()}`
+      secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+      const secondaryAuth = getAuth(secondaryApp);
 
-      await setDoc(doc(db, "faculty", mockUserId), {
-        id: mockUserId,
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const user = userCredential.user;
+
+      // Now, save the faculty's details to Firestore
+      await setDoc(doc(db, "faculty", user.uid), {
+        id: user.uid,
         name,
         email,
-        department,
+        subject,
         role: 'faculty',
       });
 
@@ -65,16 +72,20 @@ export default function CreateFacultyPage() {
       setName("")
       setEmail("")
       setPassword("")
-      setDepartment("")
+      setSubject("")
 
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Creation Failed",
-        description: error.message,
+        description: error.message || "An unknown error occurred.",
       })
     } finally {
       setIsLoading(false)
+       if (secondaryApp) {
+        // Clean up the temporary app instance
+        await deleteApp(secondaryApp);
+      }
     }
   }
 
@@ -103,13 +114,13 @@ export default function CreateFacultyPage() {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="department">Department</Label>
+                <Label htmlFor="subject">Subject</Label>
                 <Input
                   type="text"
-                  id="department"
+                  id="subject"
                   placeholder="e.g., Computer Science"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
                   required
                   disabled={isLoading}
                 />
