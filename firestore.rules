@@ -3,40 +3,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if a user is an admin
+    // Helper function to check if the requesting user is an admin.
     function isAdmin() {
-      // Allow if the user's UID exists in the 'admins' collection
       return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Students can only create their own account, and can only read/update their own document.
+    // Students: Can create their own record and can only read/write their own data.
     match /students/{userId} {
+      allow read, update, delete: if request.auth.uid == userId;
       allow create: if request.auth.uid == userId;
-      allow read, update, delete: if request.auth.uid == userId || isAdmin();
-    }
-    
-    // Students Collection can be read by admins
-    match /students/{document=**} {
-      allow list: if isAdmin();
-    }
-    
-    // Faculty can only be created by an admin. They can read/update their own doc.
-    match /faculty/{userId} {
-      // MORE PERMISSIVE RULE: Allow any authenticated user to create faculty for now
-      allow create: if request.auth != null; 
-      allow read, update, delete: if request.auth.uid == userId || isAdmin();
     }
 
-    // Faculty Collection can be read by admins
-     match /faculty/{document=**} {
-      allow list: if isAdmin();
+    // Faculty: Can be created by an admin. Can only read/write their own data.
+    match /faculty/{userId} {
+      allow read, update, delete: if request.auth.uid == userId || isAdmin();
+      allow create: if isAdmin();
     }
     
-    // Admins can be created by any authenticated user (to allow bootstrapping)
-    // Only admins can read/update/delete admin docs.
+    // Admins: An authenticated user can create their OWN admin document.
+    // This solves the chicken-and-egg problem of needing to be an admin to create the first admin.
+    // Once created, only other admins can read or modify admin documents.
     match /admins/{userId} {
-      allow create: if request.auth != null;
       allow read, update, delete: if isAdmin();
+      allow create: if request.auth.uid == userId;
     }
   }
 }
