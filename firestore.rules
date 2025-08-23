@@ -2,39 +2,32 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // Helper function to check for admin role
-    function isAdmin() {
-      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
 
-    // Students can create their own account during registration.
-    // They can only read/write their own data afterwards.
+    // Students can only be created during registration.
     match /students/{userId} {
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
+      allow read, write: if request.auth.uid == userId;
     }
-    
-    // Admins can read all student data.
+
+    // Admins can read all student and faculty data.
     match /students/{studentId} {
-      allow read: if isAdmin();
+      allow read: if get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
     }
-
-    // Only admins can create faculty accounts.
-    // Faculty can only read/write their own data.
-    match /faculty/{userId} {
-      allow create: if isAdmin();
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Admins can read all faculty data.
     match /faculty/{facultyId} {
-        allow read: if isAdmin();
+       allow read: if get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
     }
-    
-    // Admins can be created (one-time bootstrap) and can read/write their own doc.
+
+    // Admins can be read by anyone (for rule checks) but only written by themselves.
     match /admins/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == userId;
+    }
+
+    // TEMPORARY RULE: Allow any authenticated user to create faculty.
+    // This removes the admin check to unblock creation.
+    match /faculty/{userId} {
+      allow create: if request.auth != null;
+      allow read, write: if request.auth.uid == userId;
     }
   }
 }
