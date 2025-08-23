@@ -42,11 +42,9 @@ export default function CreateFacultyPage() {
               email: currentUser.email,
               role: 'admin'
             });
-            toast({
-              title: "Admin Initialized",
-              description: "Your admin account has been configured in Firestore.",
-            });
+            console.log("Admin document created in Firestore.");
           } catch (error: any) {
+             console.error("Failed to create admin document:", error);
              toast({
               variant: "destructive",
               title: "Admin Init Failed",
@@ -56,7 +54,16 @@ export default function CreateFacultyPage() {
         }
       }
     };
-    bootstrapAdmin();
+    
+    // We need to wait for the auth state to be initialized
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) {
+        bootstrapAdmin();
+        unsubscribe();
+      }
+    });
+
+    return () => unsubscribe();
   }, [toast]);
 
 
@@ -98,6 +105,7 @@ export default function CreateFacultyPage() {
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const user = userCredential.user;
 
+      // This write is performed by the LOGGED IN ADMIN, using the primary `db` instance
       await setDoc(doc(db, "faculty", user.uid), {
         id: user.uid,
         name,
@@ -117,6 +125,7 @@ export default function CreateFacultyPage() {
       setSubject("")
 
     } catch (error: any) {
+      console.error("Error creating faculty:", error);
       toast({
         variant: "destructive",
         title: "Creation Failed",

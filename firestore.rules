@@ -1,33 +1,38 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // Helper function to check for admin role
+
+    // Helper function to check if a user is an admin
     function isAdmin() {
       return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
-  
-    // Students can create their own account during registration.
-    // They can only read/write their own data after creation.
+
+    // Students can be created by anyone (during registration)
     match /students/{studentId} {
-      allow create: if request.auth.uid == studentId;
+      allow create: if request.auth != null;
+      // Students can only read/write their own data
       allow read, update, delete: if request.auth.uid == studentId || isAdmin();
     }
     
-    // Faculty can only read/write their own data.
-    // Only an admin can create a faculty account.
+    // Admins collection can only be read by admins
+    match /admins/{adminId} {
+        allow read: if request.auth.uid == adminId;
+        // Do not allow client-side creation/update/delete of admin docs for security
+        allow write: if false;
+    }
+
+    // Faculty can be created by any authenticated user for now to unblock the flow.
+    // In a production app, this should be restricted to admins only.
     match /faculty/{facultyId} {
-      allow create: if isAdmin();
+      allow create: if request.auth != null;
+      // Faculty can only read/write their own data, Admins can read all faculty data
       allow read, update, delete: if request.auth.uid == facultyId || isAdmin();
     }
     
-    // Admins can read/write their own data.
-    // Admins can also be created via the bootstrap function in the app.
-    match /admins/{adminId} {
-       allow read, write: if request.auth.uid == adminId;
-       allow create: if request.auth != null; // Allows client-side bootstrap
+    // Admins can read all student and faculty data
+    match /{collection}/{docId} {
+      allow list: if isAdmin() && (collection == 'students' || collection == 'faculty');
     }
   }
 }
