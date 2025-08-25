@@ -20,6 +20,7 @@ import {
   LogOut,
   Settings,
   UserPlus,
+  Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
@@ -51,6 +52,8 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
   ],
   admin: [
     { href: "/admin/dashboard", label: "Dashboard", icon: Home },
+    { href: "/admin/manage-faculty", label: "Manage Faculty", icon: Users },
+    { href: "/admin/manage-students", label: "Manage Students", icon: BookUser },
     { href: "/admin/create-faculty", label: "Create Faculty", icon: UserPlus },
   ],
 }
