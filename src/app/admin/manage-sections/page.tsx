@@ -44,7 +44,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import Image from "next/image"
 import { parseSchedule } from "@/ai/flows/schedule-parser-flow"
-import { ParseScheduleInput, ParseScheduleOutput } from "@/ai/schemas/schedule-parser-types"
+import { ParseScheduleInput, ParseScheduleOutput, ScheduleEntrySchema } from "@/ai/schemas/schedule-parser-types"
+import { z } from "zod"
 
 
 type Section = {
@@ -81,11 +82,14 @@ export default function ManageSectionsPage() {
   const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false)
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isScanReviewDialogOpen, setIsScanReviewDialogOpen] = useState(false)
   
   const [selectedSection, setSelectedSection] = useState<Section | null>(null)
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null)
   const [newSchedules, setNewSchedules] = useState<Partial<NewScheduleEntry>[]>([{ subject: '', startTime: '', endTime: '', facultyId: '' }])
   const [currentSectionForSchedule, setCurrentSectionForSchedule] = useState<Section | null>(null);
+  const [scannedSchedules, setScannedSchedules] = useState<z.infer<typeof ScheduleEntrySchema>[]>([]);
+
 
   const [scheduleImage, setScheduleImage] = useState<File | null>(null);
   const [scheduleImagePreview, setScheduleImagePreview] = useState<string | null>(null);
@@ -339,21 +343,16 @@ export default function ManageSectionsPage() {
         const photoDataUri = reader.result as string;
         const result = await parseSchedule({ photoDataUri });
         
-        toast({
-          title: "Scan Successful",
-          description: `Found ${result.schedules.length} schedules. Please review and assign faculty.`,
-        });
-
-        // Populate the dialog
-        const parsedSchedules = result.schedules.map(s => ({
-          subject: s.subject,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          facultyId: '', // Leave faculty blank as requested
-        }));
-
-        setNewSchedules(parsedSchedules.length > 0 ? parsedSchedules : [{ subject: '', startTime: '', endTime: '', facultyId: '' }]);
-        openScheduleDialog(selectedSection);
+        if (result.schedules.length === 0) {
+            toast({
+                title: "Scan Complete",
+                description: "No schedules were found in the image.",
+            });
+            return;
+        }
+        
+        setScannedSchedules(result.schedules);
+        setIsScanReviewDialogOpen(true);
 
         // Reset image state
         setScheduleImage(null);
@@ -375,6 +374,22 @@ export default function ManageSectionsPage() {
       setIsScanning(false);
     }
   };
+  
+  const confirmScannedSchedules = () => {
+    if (!selectedSection) return;
+
+    const parsedSchedules = scannedSchedules.map(s => ({
+      subject: s.subject,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      facultyId: '', // Leave faculty blank
+    }));
+
+    setNewSchedules(parsedSchedules.length > 0 ? parsedSchedules : [{ subject: '', startTime: '', endTime: '', facultyId: '' }]);
+    openScheduleDialog(selectedSection);
+    setIsScanReviewDialogOpen(false);
+    setScannedSchedules([]);
+  }
 
 
   return (
@@ -677,6 +692,50 @@ export default function ManageSectionsPage() {
                     Delete
                 </Button>
             </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scan Review Dialog */}
+      <Dialog open={isScanReviewDialogOpen} onOpenChange={setIsScanReviewDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Review Scanned Schedule</DialogTitle>
+            <DialogDescription>
+              AI has extracted the following schedule for section <span className="font-bold">{selectedSection?.name}</span>. Please review it before adding.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <ScrollArea className="h-auto max-h-[50vh] pr-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Subject</TableHead>
+                    <TableHead>Start Time</TableHead>
+                    <TableHead>End Time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {scannedSchedules.map((schedule, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{schedule.subject}</TableCell>
+                      <TableCell>{schedule.startTime}</TableCell>
+                      <TableCell>{schedule.endTime}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline" type="button" onClick={() => setScannedSchedules([])}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="button" onClick={confirmScannedSchedules}>
+              Confirm & Edit
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
