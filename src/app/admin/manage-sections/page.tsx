@@ -554,7 +554,7 @@ export default function ManageSectionsPage() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="grid gap-1.5">
                                             <Label htmlFor={`subject-${index}`}>Subject</Label>
-                                            <Input id={`subject-${index}`} value={schedule.subject} onChange={e => handleNewScheduleChange(index, 'subject', e.target.value)} required />
+                                            <Input id={`subject-${index}`} value={schedule.subject || ''} onChange={e => handleNewScheduleChange(index, 'subject', e.target.value)} required />
                                         </div>
                                          <div className="grid gap-1.5">
                                             <Label htmlFor={`faculty-${index}`}>Faculty</Label>
@@ -569,11 +569,11 @@ export default function ManageSectionsPage() {
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="grid gap-1.5">
                                             <Label htmlFor={`startTime-${index}`}>Start Time</Label>
-                                            <Input id={`startTime-${index}`} type="time" value={schedule.startTime} onChange={e => handleNewScheduleChange(index, 'startTime', e.target.value)} required />
+                                            <Input id={`startTime-${index}`} type="time" value={schedule.startTime || ''} onChange={e => handleNewScheduleChange(index, 'startTime', e.target.value)} required />
                                         </div>
                                         <div className="grid gap-1.5">
                                             <Label htmlFor={`endTime-${index}`}>End Time</Label>
-                                            <Input id={`endTime-${index}`} type="time" value={schedule.endTime} onChange={e => handleNewScheduleChange(index, 'endTime', e.target.value)} required />
+                                            <Input id={`endTime-${index}`} type="time" value={schedule.endTime || ''} onChange={e => handleNewScheduleChange(index, 'endTime', e.target.value)} required />
                                         </div>
                                     </div>
                                 </div>
@@ -619,5 +619,3 @@ export default function ManageSectionsPage() {
     </DashboardLayout>
   )
 }
-
-    
