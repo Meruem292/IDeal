@@ -68,10 +68,15 @@ type Schedule = {
     facultyName?: string
 }
 
-type NewScheduleEntry = Omit<Schedule, 'id' | 'facultyName'>;
+type NewScheduleEntry = {
+    subject: string
+    startTime: string
+    endTime: string
+    facultyId?: string | null
+};
 
 type EditableScheduleEntry = z.infer<typeof ScheduleEntrySchema> & {
-    facultyId?: string
+    facultyId?: string | null;
 };
 
 export default function ManageSectionsPage() {
@@ -89,7 +94,7 @@ export default function ManageSectionsPage() {
   
   const [selectedSection, setSelectedSection] = useState<Section | null>(null)
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null)
-  const [newSchedules, setNewSchedules] = useState<Partial<NewScheduleEntry>[]>([{ subject: '', startTime: '', endTime: '', facultyId: '' }])
+  const [newSchedules, setNewSchedules] = useState<Partial<NewScheduleEntry>[]>([{ subject: '', startTime: '', endTime: '', facultyId: null }])
   const [currentSectionForSchedule, setCurrentSectionForSchedule] = useState<Section | null>(null);
   const [scannedSchedules, setScannedSchedules] = useState<EditableScheduleEntry[]>([]);
 
@@ -197,7 +202,8 @@ export default function ManageSectionsPage() {
     try {
       if (selectedSchedule) { // Editing a single schedule
         const { id, facultyName, ...scheduleData } = selectedSchedule;
-        await updateDoc(doc(db, `sections/${currentSectionForSchedule.id}/schedules`, id), { ...scheduleData, facultyId: scheduleData.facultyId || null });
+        const facultyIdToSave = scheduleData.facultyId === '__none__' ? null : scheduleData.facultyId;
+        await updateDoc(doc(db, `sections/${currentSectionForSchedule.id}/schedules`, id), { ...scheduleData, facultyId: facultyIdToSave });
         toast({ title: "Schedule Updated" });
       } else { // Creating multiple schedules
         const validSchedules = newSchedules.filter(s => s.subject && s.startTime && s.endTime);
@@ -226,8 +232,9 @@ export default function ManageSectionsPage() {
 
         const batch = writeBatch(db);
         validSchedules.forEach(schedule => {
+            const facultyIdToSave = schedule.facultyId === '__none__' ? null : schedule.facultyId;
             const newScheduleRef = doc(collection(db, `sections/${currentSectionForSchedule.id}/schedules`));
-            batch.set(newScheduleRef, { ...schedule, facultyId: schedule.facultyId || null });
+            batch.set(newScheduleRef, { ...schedule, facultyId: facultyIdToSave });
         });
         await batch.commit();
         toast({ title: "Schedules Created", description: `Added ${validSchedules.length} new schedule(s).` });
@@ -241,7 +248,7 @@ export default function ManageSectionsPage() {
         setIsScheduleDialogOpen(false);
         setSelectedSchedule(null);
         setCurrentSectionForSchedule(null);
-        setNewSchedules([{ subject: '', startTime: '', endTime: '', facultyId: '' }]);
+        setNewSchedules([{ subject: '', startTime: '', endTime: '', facultyId: null }]);
     }
   };
 
@@ -293,7 +300,7 @@ export default function ManageSectionsPage() {
         setSelectedSchedule(schedule);
     } else { // Creating new schedule(s)
         setSelectedSchedule(null);
-        setNewSchedules([{ subject: '', startTime: '', endTime: '', facultyId: '' }]);
+        setNewSchedules([{ subject: '', startTime: '', endTime: '', facultyId: null }]);
     }
     setIsScheduleDialogOpen(true);
   };
@@ -303,14 +310,14 @@ export default function ManageSectionsPage() {
     setIsDeleteDialogOpen(true)
   }
 
-  const handleNewScheduleChange = (index: number, field: keyof NewScheduleEntry, value: string) => {
+  const handleNewScheduleChange = (index: number, field: keyof NewScheduleEntry, value: string | null) => {
     const updatedSchedules = [...newSchedules];
     updatedSchedules[index] = { ...updatedSchedules[index], [field]: value };
     setNewSchedules(updatedSchedules);
   };
 
   const addScheduleForm = () => {
-    setNewSchedules([...newSchedules, { subject: '', startTime: '', endTime: '', facultyId: '' }]);
+    setNewSchedules([...newSchedules, { subject: '', startTime: '', endTime: '', facultyId: null }]);
   };
 
   const removeScheduleForm = (index: number) => {
@@ -355,7 +362,7 @@ export default function ManageSectionsPage() {
             return;
         }
         
-        setScannedSchedules(result.schedules.map(s => ({...s, facultyId: ''})));
+        setScannedSchedules(result.schedules.map(s => ({...s, facultyId: null})));
         setIsScanReviewDialogOpen(true);
 
         // Reset image state
@@ -379,7 +386,7 @@ export default function ManageSectionsPage() {
     }
   };
   
-    const handleScannedScheduleChange = (index: number, field: keyof EditableScheduleEntry, value: string) => {
+    const handleScannedScheduleChange = (index: number, field: keyof EditableScheduleEntry, value: string | null) => {
         const updatedSchedules = [...scannedSchedules];
         updatedSchedules[index] = { ...updatedSchedules[index], [field]: value };
         setScannedSchedules(updatedSchedules);
@@ -415,9 +422,11 @@ export default function ManageSectionsPage() {
             const batch = writeBatch(db);
             validSchedules.forEach(schedule => {
                 const { facultyId, ...restOfSchedule } = schedule;
+                const facultyIdToSave = facultyId === '__none__' ? null : facultyId;
+
                 const scheduleData = {
                     ...restOfSchedule,
-                    facultyId: facultyId || null
+                    facultyId: facultyIdToSave
                 }
                 const newScheduleRef = doc(collection(db, `sections/${selectedSection.id}/schedules`));
                 batch.set(newScheduleRef, scheduleData);
@@ -634,7 +643,7 @@ export default function ManageSectionsPage() {
               <DialogTitle>{selectedSchedule ? 'Edit Schedule' : 'Create Schedules'}</DialogTitle>
               <DialogDescription>For section: {currentSectionForSchedule?.name}</DialogDescription>
             </DialogHeader>
-            <ScrollArea className="max-h-[60vh] pr-4">
+            <ScrollArea className="h-[60vh] pr-4">
                 <div className="p-1 space-y-6">
                 {selectedSchedule ? (
                     // Edit Form for a single schedule
@@ -645,10 +654,10 @@ export default function ManageSectionsPage() {
                         </div>
                         <div className="grid gap-1.5">
                             <Label htmlFor="faculty">Faculty (Optional)</Label>
-                            <Select value={selectedSchedule.facultyId || ''} onValueChange={value => setSelectedSchedule(s => s ? {...s, facultyId: value} : null)}>
+                            <Select value={selectedSchedule.facultyId || '__none__'} onValueChange={value => setSelectedSchedule(s => s ? {...s, facultyId: value} : null)}>
                                 <SelectTrigger id="faculty"><SelectValue placeholder="Select faculty" /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">None</SelectItem>
+                                    <SelectItem value="__none__">None</SelectItem>
                                     {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
@@ -681,10 +690,10 @@ export default function ManageSectionsPage() {
                                     </div>
                                      <div className="grid gap-1.5">
                                         <Label htmlFor={`faculty-${index}`}>Faculty (Optional)</Label>
-                                        <Select value={schedule.facultyId || ''} onValueChange={value => handleNewScheduleChange(index, 'facultyId', value)}>
+                                        <Select value={schedule.facultyId || '__none__'} onValueChange={value => handleNewScheduleChange(index, 'facultyId', value)}>
                                             <SelectTrigger id={`faculty-${index}`}><SelectValue placeholder="Select faculty" /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="">None</SelectItem>
+                                                <SelectItem value="__none__">None</SelectItem>
                                                 {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
@@ -773,10 +782,10 @@ export default function ManageSectionsPage() {
                          <Input type="time" value={schedule.endTime} onChange={(e) => handleScannedScheduleChange(index, 'endTime', e.target.value)} />
                       </TableCell>
                       <TableCell>
-                        <Select value={schedule.facultyId} onValueChange={value => handleScannedScheduleChange(index, 'facultyId', value)} >
+                        <Select value={schedule.facultyId || '__none__'} onValueChange={value => handleScannedScheduleChange(index, 'facultyId', value)} >
                             <SelectTrigger><SelectValue placeholder="Select faculty" /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">None</SelectItem>
+                                <SelectItem value="__none__">None</SelectItem>
                                 {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
