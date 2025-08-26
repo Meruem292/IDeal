@@ -68,13 +68,6 @@ type Schedule = {
     facultyName?: string
 }
 
-type NewScheduleEntry = {
-    subject: string
-    startTime: string
-    endTime: string
-    facultyId?: string | null
-};
-
 type EditableScheduleEntry = z.infer<typeof ScheduleEntrySchema> & {
     facultyId?: string | null;
 };
@@ -88,14 +81,12 @@ export default function ManageSectionsPage() {
   const [isScanning, setIsScanning] = useState(false)
   
   const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false)
-  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
+  const [isEditScheduleDialogOpen, setIsEditScheduleDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isScanReviewDialogOpen, setIsScanReviewDialogOpen] = useState(false)
   
   const [selectedSection, setSelectedSection] = useState<Section | null>(null)
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null)
-  const [newSchedules, setNewSchedules] = useState<Partial<NewScheduleEntry>[]>([{ subject: '', startTime: '', endTime: '', facultyId: null }])
-  const [currentSectionForSchedule, setCurrentSectionForSchedule] = useState<Section | null>(null);
   const [scannedSchedules, setScannedSchedules] = useState<EditableScheduleEntry[]>([]);
 
 
@@ -134,7 +125,7 @@ export default function ManageSectionsPage() {
             facultyName: faculty.find(f => f.id === schedule.facultyId)?.name || 'N/A'
         }));
         
-        setSchedules(schedulesList);
+        setSchedules(schedulesList.sort((a,b) => a.startTime.localeCompare(b.startTime)));
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error fetching schedules", description: error.message });
     } finally {
@@ -194,61 +185,23 @@ export default function ManageSectionsPage() {
     }
   }
   
-  const handleScheduleSubmit = async (e: React.FormEvent) => {
+  const handleScheduleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentSectionForSchedule) return;
+    if (!selectedSection || !selectedSchedule) return;
     setIsProcessing(true);
 
     try {
-      if (selectedSchedule) { // Editing a single schedule
-        const { id, facultyName, ...scheduleData } = selectedSchedule;
-        const facultyIdToSave = scheduleData.facultyId === '__none__' ? null : scheduleData.facultyId;
-        await updateDoc(doc(db, `sections/${currentSectionForSchedule.id}/schedules`, id), { ...scheduleData, facultyId: facultyIdToSave });
-        toast({ title: "Schedule Updated" });
-      } else { // Creating multiple schedules
-        const validSchedules = newSchedules.filter(s => s.subject && s.startTime && s.endTime);
-        if (validSchedules.length === 0) {
-            toast({ variant: 'destructive', title: 'Validation Error', description: 'Please fill out at least one schedule subject, start and end time.' });
-            setIsProcessing(false);
-            return;
-        }
-        
-        // Overlap validation
-        for (let i = 0; i < validSchedules.length; i++) {
-          for (let j = i + 1; j < validSchedules.length; j++) {
-            const s1 = validSchedules[i];
-            const s2 = validSchedules[j];
-            if (s1.startTime! < s2.endTime! && s2.startTime! < s1.endTime!) {
-              toast({
-                variant: 'destructive',
-                title: 'Schedule Overlap',
-                description: `Schedules for "${s1.subject}" and "${s2.subject}" are overlapping.`,
-              });
-              setIsProcessing(false);
-              return;
-            }
-          }
-        }
-
-        const batch = writeBatch(db);
-        validSchedules.forEach(schedule => {
-            const facultyIdToSave = schedule.facultyId === '__none__' ? null : schedule.facultyId;
-            const newScheduleRef = doc(collection(db, `sections/${currentSectionForSchedule.id}/schedules`));
-            batch.set(newScheduleRef, { ...schedule, facultyId: facultyIdToSave });
-        });
-        await batch.commit();
-        toast({ title: "Schedules Created", description: `Added ${validSchedules.length} new schedule(s).` });
-      }
-
-      fetchSchedules(currentSectionForSchedule.id);
+      const { id, facultyName, ...scheduleData } = selectedSchedule;
+      const facultyIdToSave = scheduleData.facultyId === '__none__' ? null : scheduleData.facultyId;
+      await updateDoc(doc(db, `sections/${selectedSection.id}/schedules`, id), { ...scheduleData, facultyId: facultyIdToSave });
+      toast({ title: "Schedule Updated" });
+      fetchSchedules(selectedSection.id);
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error saving schedule(s)", description: error.message });
     } finally {
         setIsProcessing(false);
-        setIsScheduleDialogOpen(false);
+        setIsEditScheduleDialogOpen(false);
         setSelectedSchedule(null);
-        setCurrentSectionForSchedule(null);
-        setNewSchedules([{ subject: '', startTime: '', endTime: '', facultyId: null }]);
     }
   };
 
@@ -294,38 +247,15 @@ export default function ManageSectionsPage() {
     setIsSectionDialogOpen(true)
   }
 
-  const openScheduleDialog = (section: Section, schedule?: Schedule) => {
-    setCurrentSectionForSchedule(section);
-    if (schedule) { // Editing existing schedule
-        setSelectedSchedule(schedule);
-    } else { // Creating new schedule(s)
-        setSelectedSchedule(null);
-        setNewSchedules([{ subject: '', startTime: '', endTime: '', facultyId: null }]);
-    }
-    setIsScheduleDialogOpen(true);
+  const openEditScheduleDialog = (schedule: Schedule) => {
+    setSelectedSchedule(schedule);
+    setIsEditScheduleDialogOpen(true);
   };
 
   const openDeleteDialog = (section: Section) => {
     setSelectedSection(section)
     setIsDeleteDialogOpen(true)
   }
-
-  const handleNewScheduleChange = (index: number, field: keyof NewScheduleEntry, value: string | null) => {
-    const updatedSchedules = [...newSchedules];
-    updatedSchedules[index] = { ...updatedSchedules[index], [field]: value };
-    setNewSchedules(updatedSchedules);
-  };
-
-  const addScheduleForm = () => {
-    setNewSchedules([...newSchedules, { subject: '', startTime: '', endTime: '', facultyId: null }]);
-  };
-
-  const removeScheduleForm = (index: number) => {
-    if (newSchedules.length > 1) {
-        const updatedSchedules = newSchedules.filter((_, i) => i !== index);
-        setNewSchedules(updatedSchedules);
-    }
-  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -368,6 +298,9 @@ export default function ManageSectionsPage() {
         // Reset image state
         setScheduleImage(null);
         setScheduleImagePreview(null);
+        // Clear file input
+        const fileInput = document.getElementById('picture') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
       };
 
       reader.onerror = (error) => {
@@ -527,6 +460,8 @@ export default function ManageSectionsPage() {
                                     onClick={() => {
                                         setScheduleImage(null);
                                         setScheduleImagePreview(null);
+                                        const fileInput = document.getElementById('picture') as HTMLInputElement;
+                                        if (fileInput) fileInput.value = '';
                                     }}
                                 >
                                     <X className="h-4 w-4"/>
@@ -545,16 +480,13 @@ export default function ManageSectionsPage() {
         </div>
 
         <Card className="mt-6">
-            <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                    <CardTitle>Class Schedule</CardTitle>
-                    <CardDescription>
-                        {selectedSection ? `Schedule for ${selectedSection.name}` : "Select a section to view its schedule"}
-                    </CardDescription>
-                </div>
-                    <Button onClick={() => openScheduleDialog(selectedSection!)} disabled={!selectedSection}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add Schedule
-                </Button>
+            <CardHeader>
+                <div>
+                <CardTitle>Class Schedule</CardTitle>
+                <CardDescription>
+                    {selectedSection ? `Schedule for ${selectedSection.name}` : "Select a section to view its schedule"}
+                </CardDescription>
+            </div>
             </CardHeader>
             <CardContent>
                 {isLoading && selectedSection ? (
@@ -578,7 +510,7 @@ export default function ManageSectionsPage() {
                                     <p className="text-xs text-muted-foreground">{schedule.facultyName}</p>
                                 </div>
                                 <div>
-                                    <Button variant="ghost" size="icon" onClick={() => openScheduleDialog(selectedSection, schedule)} className="mr-2">
+                                    <Button variant="ghost" size="icon" onClick={() => openEditScheduleDialog(schedule)} className="mr-2">
                                         <Edit className="h-4 w-4" />
                                     </Button>
                                     <Button variant="ghost" size="icon" onClick={() => handleDeleteSchedule(schedule.id)} className="text-destructive hover:text-destructive">
@@ -629,101 +561,47 @@ export default function ManageSectionsPage() {
         </DialogContent>
       </Dialog>
 
-       {/* Schedule Dialog */}
-      <Dialog open={isScheduleDialogOpen} onOpenChange={(isOpen) => {
-            if (!isOpen) {
-                setCurrentSectionForSchedule(null);
-                setSelectedSchedule(null);
-            }
-            setIsScheduleDialogOpen(isOpen);
-        }}>
-        <DialogContent className="max-w-3xl">
-          <form onSubmit={handleScheduleSubmit}>
+       {/* Edit Schedule Dialog */}
+      <Dialog open={isEditScheduleDialogOpen} onOpenChange={setIsEditScheduleDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleScheduleUpdate}>
             <DialogHeader>
-              <DialogTitle>{selectedSchedule ? 'Edit Schedule' : 'Create Schedules'}</DialogTitle>
-              <DialogDescription>For section: {currentSectionForSchedule?.name}</DialogDescription>
+              <DialogTitle>Edit Schedule</DialogTitle>
+              <DialogDescription>For section: {selectedSection?.name}</DialogDescription>
             </DialogHeader>
-            <ScrollArea className="h-[60vh] pr-4">
-                <div className="p-1 space-y-6">
-                {selectedSchedule ? (
-                    // Edit Form for a single schedule
-                    <div className="space-y-4 p-1">
+            <div className="py-4 space-y-4">
+                <div className="space-y-4 p-1">
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="subject">Subject</Label>
+                        <Input id="subject" value={selectedSchedule?.subject || ''} onChange={e => setSelectedSchedule(s => s ? {...s, subject: e.target.value} : null)} required />
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="faculty">Faculty (Optional)</Label>
+                        <Select value={selectedSchedule?.facultyId || '__none__'} onValueChange={value => setSelectedSchedule(s => s ? {...s, facultyId: value} : null)}>
+                            <SelectTrigger id="faculty"><SelectValue placeholder="Select faculty" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">None</SelectItem>
+                                {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-1.5">
-                            <Label htmlFor="subject">Subject</Label>
-                            <Input id="subject" value={selectedSchedule.subject} onChange={e => setSelectedSchedule(s => s ? {...s, subject: e.target.value} : null)} required />
+                            <Label htmlFor="startTime">Start Time</Label>
+                            <Input id="startTime" type="time" value={selectedSchedule?.startTime || ''} onChange={e => setSelectedSchedule(s => s ? {...s, startTime: e.target.value} : null)} required />
                         </div>
                         <div className="grid gap-1.5">
-                            <Label htmlFor="faculty">Faculty (Optional)</Label>
-                            <Select value={selectedSchedule.facultyId || '__none__'} onValueChange={value => setSelectedSchedule(s => s ? {...s, facultyId: value} : null)}>
-                                <SelectTrigger id="faculty"><SelectValue placeholder="Select faculty" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none__">None</SelectItem>
-                                    {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-1.5">
-                                <Label htmlFor="startTime">Start Time</Label>
-                                <Input id="startTime" type="time" value={selectedSchedule.startTime} onChange={e => setSelectedSchedule(s => s ? {...s, startTime: e.target.value} : null)} required />
-                            </div>
-                            <div className="grid gap-1.5">
-                                <Label htmlFor="endTime">End Time</Label>
-                                <Input id="endTime" type="time" value={selectedSchedule.endTime} onChange={e => setSelectedSchedule(s => s ? {...s, endTime: e.target.value} : null)} required />
-                            </div>
+                            <Label htmlFor="endTime">End Time</Label>
+                            <Input id="endTime" type="time" value={selectedSchedule?.endTime || ''} onChange={e => setSelectedSchedule(s => s ? {...s, endTime: e.target.value} : null)} required />
                         </div>
                     </div>
-                ) : (
-                    // Create Form for multiple schedules
-                    <div className="space-y-4">
-                        {newSchedules.map((schedule, index) => (
-                            <div key={index} className="p-4 border rounded-md relative space-y-4">
-                                {newSchedules.length > 1 && (
-                                    <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-muted-foreground hover:text-destructive" onClick={() => removeScheduleForm(index)}>
-                                        <X className="h-4 w-4" />
-                                    </Button>
-                                )}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="grid gap-1.5">
-                                        <Label htmlFor={`subject-${index}`}>Subject</Label>
-                                        <Input id={`subject-${index}`} value={schedule.subject || ''} onChange={e => handleNewScheduleChange(index, 'subject', e.target.value)} required />
-                                    </div>
-                                     <div className="grid gap-1.5">
-                                        <Label htmlFor={`faculty-${index}`}>Faculty (Optional)</Label>
-                                        <Select value={schedule.facultyId || '__none__'} onValueChange={value => handleNewScheduleChange(index, 'facultyId', value)}>
-                                            <SelectTrigger id={`faculty-${index}`}><SelectValue placeholder="Select faculty" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="__none__">None</SelectItem>
-                                                {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-1.5">
-                                        <Label htmlFor={`startTime-${index}`}>Start Time</Label>
-                                        <Input id={`startTime-${index}`} type="time" value={schedule.startTime || ''} onChange={e => handleNewScheduleChange(index, 'startTime', e.target.value)} required />
-                                    </div>
-                                    <div className="grid gap-1.5">
-                                        <Label htmlFor={`endTime-${index}`}>End Time</Label>
-                                        <Input id={`endTime-${index}`} type="time" value={schedule.endTime || ''} onChange={e => handleNewScheduleChange(index, 'endTime', e.target.value)} required />
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                        <Button type="button" variant="outline" onClick={addScheduleForm}>
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Add Subject
-                        </Button>
-                    </div>
-                )}
                 </div>
-            </ScrollArea>
-            <DialogFooter className="pt-4 border-t mt-4">
+            </div>
+            <DialogFooter>
                 <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
                 <Button type="submit" disabled={isProcessing}>
                     {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {selectedSchedule ? 'Save Changes' : 'Save Schedules'}
+                    Save Changes
                 </Button>
             </DialogFooter>
           </form>
