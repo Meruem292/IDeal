@@ -377,16 +377,18 @@ export default function ManageSectionsPage() {
   
   const confirmScannedSchedules = () => {
     if (!selectedSection) return;
-
+  
     const parsedSchedules = scannedSchedules.map(s => ({
       subject: s.subject,
       startTime: s.startTime,
       endTime: s.endTime,
       facultyId: '', // Leave faculty blank
     }));
-
+  
     setNewSchedules(parsedSchedules.length > 0 ? parsedSchedules : [{ subject: '', startTime: '', endTime: '', facultyId: '' }]);
-    openScheduleDialog(selectedSection);
+    setSelectedSchedule(null);
+    setCurrentSectionForSchedule(selectedSection);
+    setIsScheduleDialogOpen(true);
     setIsScanReviewDialogOpen(false);
     setScannedSchedules([]);
   }
@@ -705,25 +707,27 @@ export default function ManageSectionsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <ScrollArea className="h-auto max-h-[50vh] pr-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Start Time</TableHead>
-                    <TableHead>End Time</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {scannedSchedules.map((schedule, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{schedule.subject}</TableCell>
-                      <TableCell>{schedule.startTime}</TableCell>
-                      <TableCell>{schedule.endTime}</TableCell>
+            <ScrollArea className="h-auto max-h-[50vh] rounded-md border">
+              <div className="p-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Subject</TableHead>
+                      <TableHead>Start Time</TableHead>
+                      <TableHead>End Time</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {scannedSchedules.map((schedule, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{schedule.subject}</TableCell>
+                        <TableCell>{schedule.startTime}</TableCell>
+                        <TableCell>{schedule.endTime}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </ScrollArea>
           </div>
           <DialogFooter>
