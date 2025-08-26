@@ -24,13 +24,13 @@ const prompt = ai.definePrompt({
   output: { schema: ParseScheduleOutputSchema },
   prompt: `You are an expert schedule parser. Analyze the provided image of a class schedule.
 
-Your task is to extract all class entries for a single day of the week. Identify the day of the week the schedule belongs to.
+Your task is to extract all class entries from the schedule.
 
 For each class, identify the subject name, the start time, and the end time.
 Format the times in a 24-hour HH:mm format.
 Return the data as a JSON object matching the provided schema.
 
-Do not include faculty names or any other information. Only extract the subject, start time, and end time for each class on a specific day. If multiple days are present, pick one and return all schedules for that day.
+Do not include faculty names, days of the week, or any other information. Only extract the subject, start time, and end time for each class.
 
 Image: {{media url=photoDataUri}}`,
 });

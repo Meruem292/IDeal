@@ -19,7 +19,6 @@ export const ScheduleEntrySchema = z.object({
 });
 
 export const ParseScheduleOutputSchema = z.object({
-    dayOfWeek: z.string().describe('The day of the week for these schedules (e.g., "Monday", "Tuesday").'),
     schedules: z.array(ScheduleEntrySchema).describe('An array of all schedules found for that day.'),
 });
 export type ParseScheduleOutput = z.infer<typeof ParseScheduleOutputSchema>;
