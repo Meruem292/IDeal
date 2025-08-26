@@ -43,7 +43,9 @@ import {
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import Image from "next/image"
-import { parseSchedule, ParseScheduleInput, ParseScheduleOutput } from "@/ai/flows/schedule-parser-flow"
+import { parseSchedule } from "@/ai/flows/schedule-parser-flow"
+import { ParseScheduleInput, ParseScheduleOutput } from "@/ai/schemas/schedule-parser-types"
+
 
 type Section = {
   id: string
