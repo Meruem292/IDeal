@@ -348,6 +348,7 @@ export default function ManageSectionsPage() {
                 title: "Scan Complete",
                 description: "No schedules were found in the image.",
             });
+            setIsScanning(false);
             return;
         }
         
@@ -706,30 +707,28 @@ export default function ManageSectionsPage() {
               AI has extracted the following schedule for section <span className="font-bold">{selectedSection?.name}</span>. Please review it before adding.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <ScrollArea className="h-auto max-h-[50vh] rounded-md border">
-              <div className="p-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Subject</TableHead>
-                      <TableHead>Start Time</TableHead>
-                      <TableHead>End Time</TableHead>
+          <ScrollArea className="max-h-[60vh] rounded-md border">
+            <div className="p-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Subject</TableHead>
+                    <TableHead>Start Time</TableHead>
+                    <TableHead>End Time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {scannedSchedules.map((schedule, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{schedule.subject}</TableCell>
+                      <TableCell>{schedule.startTime}</TableCell>
+                      <TableCell>{schedule.endTime}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {scannedSchedules.map((schedule, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{schedule.subject}</TableCell>
-                        <TableCell>{schedule.startTime}</TableCell>
-                        <TableCell>{schedule.endTime}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </ScrollArea>
-          </div>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </ScrollArea>
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline" type="button" onClick={() => setScannedSchedules([])}>
