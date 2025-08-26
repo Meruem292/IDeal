@@ -1,3 +1,4 @@
+
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
@@ -43,6 +44,7 @@ import {
 type Section = {
   id: string
   name: string
+  adviserId: string
   adviserName: string
 }
 
@@ -131,17 +133,31 @@ export default function ManageSectionsPage() {
 
   const handleSectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedSection) return
+    if (!selectedSection || !selectedSection.adviserId) {
+        toast({ variant: "destructive", title: "Missing Information", description: "Please select an adviser." })
+        return
+    }
     setIsProcessing(true)
-    
-    const { id, ...sectionData } = selectedSection;
 
+    const adviser = faculty.find(f => f.id === selectedSection.adviserId);
+    if (!adviser) {
+        toast({ variant: "destructive", title: "Invalid Adviser", description: "The selected adviser could not be found." });
+        setIsProcessing(false);
+        return;
+    }
+
+    const sectionData = {
+        name: selectedSection.name,
+        adviserId: selectedSection.adviserId,
+        adviserName: adviser.name,
+    };
+    
     try {
-      if (id === 'new') { // Creating new section
+      if (selectedSection.id === 'new') { // Creating new section
         await addDoc(collection(db, "sections"), sectionData)
         toast({ title: "Section Created", description: `Section ${sectionData.name} has been created.` })
       } else { // Updating existing section
-        const sectionRef = doc(db, "sections", id);
+        const sectionRef = doc(db, "sections", selectedSection.id);
         await updateDoc(sectionRef, sectionData);
         toast({ title: "Section Updated", description: "Section details have been updated." })
       }
@@ -222,7 +238,7 @@ export default function ManageSectionsPage() {
 
 
   const openSectionDialog = (section?: Section) => {
-    setSelectedSection(section || { id: 'new', name: '', adviserName: '' })
+    setSelectedSection(section || { id: 'new', name: '', adviserId: '', adviserName: '' })
     setIsSectionDialogOpen(true)
   }
 
@@ -367,9 +383,18 @@ export default function ManageSectionsPage() {
                   <Input id="name" value={selectedSection?.name || ''} onChange={(e) => setSelectedSection(s => s ? {...s, name: e.target.value} : null)} required />
               </div>
               <div className="grid gap-1.5">
-                  <Label htmlFor="adviserName">Adviser Name</Label>
-                  <Input id="adviserName" value={selectedSection?.adviserName || ''} onChange={(e) => setSelectedSection(s => s ? {...s, adviserName: e.target.value} : null)} required />
-              </div>
+                    <Label htmlFor="adviser">Adviser</Label>
+                    <Select 
+                        value={selectedSection?.adviserId} 
+                        onValueChange={value => setSelectedSection(s => s ? {...s, adviserId: value} : null)} 
+                        required
+                    >
+                        <SelectTrigger id="adviser"><SelectValue placeholder="Select adviser" /></SelectTrigger>
+                        <SelectContent>
+                            {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
             <DialogFooter>
                 <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
