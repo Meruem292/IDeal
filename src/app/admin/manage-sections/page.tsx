@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Trash2, Edit, PlusCircle, Calendar as CalendarIcon, X } from "lucide-react"
+import { Loader2, Trash2, Edit, PlusCircle, Calendar as CalendarIcon, X, Upload, Scan } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, doc, deleteDoc, updateDoc, addDoc, writeBatch } from "firebase/firestore"
 import {
@@ -41,6 +42,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import Image from "next/image"
+import { parseSchedule, ParseScheduleInput, ParseScheduleOutput } from "@/ai/flows/schedule-parser-flow"
 
 type Section = {
   id: string
@@ -74,6 +77,7 @@ export default function ManageSectionsPage() {
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isScanning, setIsScanning] = useState(false)
   
   const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false)
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
@@ -84,6 +88,10 @@ export default function ManageSectionsPage() {
   const [newSchedules, setNewSchedules] = useState<Partial<NewScheduleEntry>[]>([{ subject: '', startTime: '', endTime: '', facultyId: '' }])
   const [selectedDay, setSelectedDay] = useState('');
   const [currentSectionForSchedule, setCurrentSectionForSchedule] = useState<Section | null>(null);
+
+  const [scheduleImage, setScheduleImage] = useState<File | null>(null);
+  const [scheduleImagePreview, setScheduleImagePreview] = useState<string | null>(null);
+
 
   const { toast } = useToast()
 
@@ -322,11 +330,75 @@ export default function ManageSectionsPage() {
     }
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setScheduleImage(file);
+      setScheduleImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleScanSchedule = async () => {
+    if (!scheduleImage || !selectedSection) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please select a section and upload an image first.",
+      });
+      return;
+    }
+    setIsScanning(true);
+
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(scheduleImage);
+      reader.onload = async () => {
+        const photoDataUri = reader.result as string;
+        const result = await parseSchedule({ photoDataUri });
+        
+        toast({
+          title: "Scan Successful",
+          description: `Found ${result.schedules.length} schedules for ${result.dayOfWeek}. Please review and assign faculty.`,
+        });
+
+        // Populate the dialog
+        const parsedSchedules = result.schedules.map(s => ({
+          subject: s.subject,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          facultyId: '', // Leave faculty blank as requested
+        }));
+
+        setNewSchedules(parsedSchedules.length > 0 ? parsedSchedules : [{ subject: '', startTime: '', endTime: '', facultyId: '' }]);
+        setSelectedDay(result.dayOfWeek);
+        openScheduleDialog(selectedSection);
+
+        // Reset image state
+        setScheduleImage(null);
+        setScheduleImagePreview(null);
+      };
+
+      reader.onerror = (error) => {
+        throw new Error("Failed to read image file.");
+      }
+
+    } catch (error: any) {
+      console.error("Error scanning schedule:", error);
+      toast({
+        variant: "destructive",
+        title: "Scan Failed",
+        description: error.message || "Could not parse schedule from image.",
+      });
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
 
   return (
     <DashboardLayout role="admin">
-        <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
+        <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+            <Card className="xl:col-span-2">
                 <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                     <CardTitle>Manage Sections</CardTitle>
@@ -377,61 +449,106 @@ export default function ManageSectionsPage() {
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                     <div>
-                        <CardTitle>Class Schedule</CardTitle>
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Upload & Scan Schedule</CardTitle>
                         <CardDescription>
-                            {selectedSection ? `Schedule for ${selectedSection.name}` : "Select a section to view its schedule"}
+                           Select a section, upload its schedule image, and let AI do the work.
                         </CardDescription>
-                    </div>
-                     <Button onClick={() => openScheduleDialog(selectedSection!)} disabled={!selectedSection}>
-                        <PlusCircle className="mr-2 h-4 w-4" /> Add Schedule
-                    </Button>
-                </CardHeader>
-                <CardContent>
-                   {isLoading && selectedSection ? (
-                        <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-                   ) : !selectedSection ? (
-                       <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
-                            <CalendarIcon className="h-10 w-10 mb-2"/>
-                            <p>No section selected.</p>
-                       </div>
-                   ) : Object.keys(schedulesByDay).length === 0 ? (
-                       <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
-                            <p>No schedules found for this section.</p>
-                       </div>
-                   ) : (
-                       <div className="space-y-4">
-                           {daysOfWeek.filter(day => schedulesByDay[day]).map(day => (
-                               <div key={day}>
-                                   <h4 className="font-semibold text-primary mb-2">{day}</h4>
-                                   <div className="space-y-2">
-                                        {schedulesByDay[day].map(schedule => (
-                                            <div key={schedule.id} className="flex justify-between items-center p-2 bg-secondary rounded-md">
-                                                <div>
-                                                    <p className="font-medium">{schedule.subject}</p>
-                                                    <p className="text-sm text-muted-foreground">{schedule.startTime} - {schedule.endTime}</p>
-                                                    <p className="text-xs text-muted-foreground">{schedule.facultyName}</p>
-                                                </div>
-                                                <div>
-                                                     <Button variant="ghost" size="icon" onClick={() => openScheduleDialog(selectedSection, schedule)} className="mr-2">
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteSchedule(schedule.id)} className="text-destructive hover:text-destructive">
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                   </div>
-                               </div>
-                           ))}
-                       </div>
-                   )}
-                </CardContent>
-            </Card>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="text-sm text-muted-foreground">
+                            Selected Section: <span className="font-semibold text-primary">{selectedSection?.name || 'None'}</span>
+                        </div>
+                        <Input id="picture" type="file" accept="image/*" onChange={handleImageUpload} disabled={!selectedSection || isScanning}/>
+                        {scheduleImagePreview && (
+                            <div className="relative mt-4">
+                                <Image 
+                                    src={scheduleImagePreview} 
+                                    alt="Schedule preview" 
+                                    width={400} 
+                                    height={400} 
+                                    className="rounded-md object-contain max-h-48 w-full"
+                                />
+                                <Button 
+                                    variant="destructive" 
+                                    size="icon"
+                                    className="absolute top-2 right-2 h-6 w-6"
+                                    onClick={() => {
+                                        setScheduleImage(null);
+                                        setScheduleImagePreview(null);
+                                    }}
+                                >
+                                    <X className="h-4 w-4"/>
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                    <CardFooter>
+                         <Button onClick={handleScanSchedule} disabled={!scheduleImage || !selectedSection || isScanning}>
+                            {isScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Scan className="mr-2 h-4 w-4" />}
+                            Scan Schedule
+                        </Button>
+                    </CardFooter>
+                </Card>
+            </div>
         </div>
+
+        <Card className="mt-6">
+            <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                    <CardTitle>Class Schedule</CardTitle>
+                    <CardDescription>
+                        {selectedSection ? `Schedule for ${selectedSection.name}` : "Select a section to view its schedule"}
+                    </CardDescription>
+                </div>
+                    <Button onClick={() => openScheduleDialog(selectedSection!)} disabled={!selectedSection}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add Schedule
+                </Button>
+            </CardHeader>
+            <CardContent>
+                {isLoading && selectedSection ? (
+                    <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                ) : !selectedSection ? (
+                    <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+                        <CalendarIcon className="h-10 w-10 mb-2"/>
+                        <p>No section selected.</p>
+                    </div>
+                ) : Object.keys(schedulesByDay).length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+                        <p>No schedules found for this section.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {daysOfWeek.filter(day => schedulesByDay[day]).map(day => (
+                            <div key={day}>
+                                <h4 className="font-semibold text-primary mb-2">{day}</h4>
+                                <div className="space-y-2">
+                                    {schedulesByDay[day].map(schedule => (
+                                        <div key={schedule.id} className="flex justify-between items-center p-2 bg-secondary rounded-md">
+                                            <div>
+                                                <p className="font-medium">{schedule.subject}</p>
+                                                <p className="text-sm text-muted-foreground">{schedule.startTime} - {schedule.endTime}</p>
+                                                <p className="text-xs text-muted-foreground">{schedule.facultyName}</p>
+                                            </div>
+                                            <div>
+                                                    <Button variant="ghost" size="icon" onClick={() => openScheduleDialog(selectedSection, schedule)} className="mr-2">
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
+                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteSchedule(schedule.id)} className="text-destructive hover:text-destructive">
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
 
       {/* Section Dialog */}
       <Dialog open={isSectionDialogOpen} onOpenChange={setIsSectionDialogOpen}>
