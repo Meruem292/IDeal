@@ -44,9 +44,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import Image from "next/image"
 import { parseSchedule } from "@/ai/flows/schedule-parser-flow"
-import { ParseScheduleInput, ParseScheduleOutput, ScheduleEntrySchema } from "@/ai/schemas/schedule-parser-types"
 import { z } from "zod"
-
+import { ScheduleEntrySchema } from "@/ai/schemas/schedule-parser-types"
 
 type Section = {
   id: string
@@ -71,6 +70,10 @@ type Schedule = {
 
 type NewScheduleEntry = Omit<Schedule, 'id' | 'facultyName'>;
 
+type EditableScheduleEntry = z.infer<typeof ScheduleEntrySchema> & {
+    facultyId?: string
+};
+
 export default function ManageSectionsPage() {
   const [sections, setSections] = useState<Section[]>([])
   const [faculty, setFaculty] = useState<Faculty[]>([])
@@ -88,7 +91,7 @@ export default function ManageSectionsPage() {
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null)
   const [newSchedules, setNewSchedules] = useState<Partial<NewScheduleEntry>[]>([{ subject: '', startTime: '', endTime: '', facultyId: '' }])
   const [currentSectionForSchedule, setCurrentSectionForSchedule] = useState<Section | null>(null);
-  const [scannedSchedules, setScannedSchedules] = useState<z.infer<typeof ScheduleEntrySchema>[]>([]);
+  const [scannedSchedules, setScannedSchedules] = useState<EditableScheduleEntry[]>([]);
 
 
   const [scheduleImage, setScheduleImage] = useState<File | null>(null);
@@ -352,7 +355,7 @@ export default function ManageSectionsPage() {
             return;
         }
         
-        setScannedSchedules(result.schedules);
+        setScannedSchedules(result.schedules.map(s => ({...s, facultyId: ''})));
         setIsScanReviewDialogOpen(true);
 
         // Reset image state
@@ -376,23 +379,55 @@ export default function ManageSectionsPage() {
     }
   };
   
-  const confirmScannedSchedules = () => {
-    if (!selectedSection) return;
-  
-    const parsedSchedules = scannedSchedules.map(s => ({
-      subject: s.subject,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      facultyId: '', // Leave faculty blank
-    }));
-  
-    setNewSchedules(parsedSchedules.length > 0 ? parsedSchedules : [{ subject: '', startTime: '', endTime: '', facultyId: '' }]);
-    setSelectedSchedule(null);
-    setCurrentSectionForSchedule(selectedSection);
-    setIsScheduleDialogOpen(true);
-    setIsScanReviewDialogOpen(false);
-    setScannedSchedules([]);
-  }
+    const handleScannedScheduleChange = (index: number, field: keyof EditableScheduleEntry, value: string) => {
+        const updatedSchedules = [...scannedSchedules];
+        updatedSchedules[index] = { ...updatedSchedules[index], [field]: value };
+        setScannedSchedules(updatedSchedules);
+    };
+
+    const handleSaveScannedSchedules = async () => {
+        if (!selectedSection) return;
+
+        const validSchedules = scannedSchedules.filter(s => s.subject && s.startTime && s.endTime && s.facultyId);
+        if (validSchedules.length !== scannedSchedules.length) {
+            toast({ variant: 'destructive', title: 'Validation Error', description: 'Please fill out all fields for all schedules.' });
+            return;
+        }
+
+        // Overlap validation
+        for (let i = 0; i < validSchedules.length; i++) {
+            for (let j = i + 1; j < validSchedules.length; j++) {
+                const s1 = validSchedules[i];
+                const s2 = validSchedules[j];
+                if (s1.startTime! < s2.endTime! && s2.startTime! < s1.endTime!) {
+                    toast({
+                        variant: 'destructive',
+                        title: 'Schedule Overlap',
+                        description: `Schedules for "${s1.subject}" and "${s2.subject}" are overlapping.`,
+                    });
+                    return;
+                }
+            }
+        }
+        
+        setIsProcessing(true);
+        try {
+            const batch = writeBatch(db);
+            validSchedules.forEach(schedule => {
+                const newScheduleRef = doc(collection(db, `sections/${selectedSection.id}/schedules`));
+                batch.set(newScheduleRef, schedule);
+            });
+            await batch.commit();
+            toast({ title: "Schedules Created", description: `Added ${validSchedules.length} new schedule(s) from scan.` });
+            fetchSchedules(selectedSection.id);
+        } catch (error: any) {
+            toast({ variant: "destructive", title: "Error saving schedules", description: error.message });
+        } finally {
+            setIsProcessing(false);
+            setIsScanReviewDialogOpen(false);
+            setScannedSchedules([]);
+        }
+    };
 
 
   return (
@@ -594,8 +629,8 @@ export default function ManageSectionsPage() {
               <DialogTitle>{selectedSchedule ? 'Edit Schedule' : 'Create Schedules'}</DialogTitle>
               <DialogDescription>For section: {currentSectionForSchedule?.name}</DialogDescription>
             </DialogHeader>
-            <ScrollArea className="max-h-[60vh] p-1">
-                <div className="p-4 space-y-6">
+            <ScrollArea className="max-h-[60vh] pr-4">
+                <div className="p-1 space-y-6">
                 {selectedSchedule ? (
                     // Edit Form for a single schedule
                     <div className="space-y-4 p-1">
@@ -668,7 +703,7 @@ export default function ManageSectionsPage() {
                 )}
                 </div>
             </ScrollArea>
-            <DialogFooter className="pt-4">
+            <DialogFooter className="pt-4 border-t mt-4">
                 <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
                 <Button type="submit" disabled={isProcessing}>
                     {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -700,29 +735,44 @@ export default function ManageSectionsPage() {
 
       {/* Scan Review Dialog */}
       <Dialog open={isScanReviewDialogOpen} onOpenChange={setIsScanReviewDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Review Scanned Schedule</DialogTitle>
+            <DialogTitle>Review & Confirm Scanned Schedule</DialogTitle>
             <DialogDescription>
-              AI has extracted the following schedule for section <span className="font-bold">{selectedSection?.name}</span>. Please review it before adding.
+              AI has extracted the following schedule for section <span className="font-bold">{selectedSection?.name}</span>. Please review, correct, and assign faculty before saving.
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] rounded-md border">
-            <div className="p-4">
+            <div className="p-1">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Subject</TableHead>
+                    <TableHead className="w-1/3">Subject</TableHead>
                     <TableHead>Start Time</TableHead>
                     <TableHead>End Time</TableHead>
+                    <TableHead className="w-1/3">Faculty</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {scannedSchedules.map((schedule, index) => (
                     <TableRow key={index}>
-                      <TableCell>{schedule.subject}</TableCell>
-                      <TableCell>{schedule.startTime}</TableCell>
-                      <TableCell>{schedule.endTime}</TableCell>
+                      <TableCell>
+                         <Input value={schedule.subject} onChange={(e) => handleScannedScheduleChange(index, 'subject', e.target.value)} />
+                      </TableCell>
+                      <TableCell>
+                         <Input type="time" value={schedule.startTime} onChange={(e) => handleScannedScheduleChange(index, 'startTime', e.target.value)} />
+                      </TableCell>
+                      <TableCell>
+                         <Input type="time" value={schedule.endTime} onChange={(e) => handleScannedScheduleChange(index, 'endTime', e.target.value)} />
+                      </TableCell>
+                      <TableCell>
+                        <Select value={schedule.facultyId} onValueChange={value => handleScannedScheduleChange(index, 'facultyId', value)} >
+                            <SelectTrigger><SelectValue placeholder="Select faculty" /></SelectTrigger>
+                            <SelectContent>
+                                {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -731,12 +781,13 @@ export default function ManageSectionsPage() {
           </ScrollArea>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline" type="button" onClick={() => setScannedSchedules([])}>
+              <Button variant="outline" type="button" onClick={() => setScannedSchedules([])} disabled={isProcessing}>
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="button" onClick={confirmScannedSchedules}>
-              Confirm & Edit
+            <Button type="button" onClick={handleSaveScannedSchedules} disabled={isProcessing}>
+                {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Schedules
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -744,3 +795,5 @@ export default function ManageSectionsPage() {
     </DashboardLayout>
   )
 }
+
+    
