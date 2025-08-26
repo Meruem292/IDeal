@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Trash2, Edit, PlusCircle, Calendar as CalendarIcon } from "lucide-react"
+import { Loader2, Trash2, Edit, PlusCircle, Calendar as CalendarIcon, X } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, doc, deleteDoc, updateDoc, addDoc, writeBatch } from "firebase/firestore"
 import {
@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 type Section = {
   id: string
@@ -78,6 +79,7 @@ export default function ManageSectionsPage() {
   
   const [selectedSection, setSelectedSection] = useState<Section | null>(null)
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null)
+  const [newSchedules, setNewSchedules] = useState<Partial<Schedule>[]>([{ subject: '', dayOfWeek: '', startTime: '', endTime: '', facultyId: '' }])
   const [currentSectionForSchedule, setCurrentSectionForSchedule] = useState<Section | null>(null);
 
   const { toast } = useToast()
@@ -173,28 +175,35 @@ export default function ManageSectionsPage() {
   
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSchedule || !currentSectionForSchedule) return;
+    if (!currentSectionForSchedule) return;
     setIsProcessing(true);
 
-    const { id, facultyName, ...scheduleData } = selectedSchedule;
-
     try {
-        const schedulePath = `sections/${currentSectionForSchedule.id}/schedules`;
-        if (id === 'new') {
-            await addDoc(collection(db, schedulePath), scheduleData);
-            toast({ title: "Schedule Created" });
-        } else {
-            await updateDoc(doc(db, schedulePath, id), scheduleData);
-            toast({ title: "Schedule Updated" });
-        }
-        fetchSchedules(currentSectionForSchedule.id);
+      if (selectedSchedule) { // Editing a single schedule
+        const { id, facultyName, ...scheduleData } = selectedSchedule;
+        await updateDoc(doc(db, `sections/${currentSectionForSchedule.id}/schedules`, id), scheduleData);
+        toast({ title: "Schedule Updated" });
+      } else { // Creating multiple schedules
+        const batch = writeBatch(db);
+        newSchedules.forEach(schedule => {
+            if (schedule.subject && schedule.dayOfWeek && schedule.startTime && schedule.endTime && schedule.facultyId) {
+                const newScheduleRef = doc(collection(db, `sections/${currentSectionForSchedule.id}/schedules`));
+                batch.set(newScheduleRef, schedule);
+            }
+        });
+        await batch.commit();
+        toast({ title: "Schedules Created", description: `Added ${newSchedules.length} new schedule(s).` });
+      }
+
+      fetchSchedules(currentSectionForSchedule.id);
     } catch (error: any) {
-        toast({ variant: "destructive", title: "Error saving schedule", description: error.message });
+        toast({ variant: "destructive", title: "Error saving schedule(s)", description: error.message });
     } finally {
         setIsProcessing(false);
         setIsScheduleDialogOpen(false);
         setSelectedSchedule(null);
         setCurrentSectionForSchedule(null);
+        setNewSchedules([{ subject: '', dayOfWeek: '', startTime: '', endTime: '', facultyId: '' }]);
     }
   };
 
@@ -203,8 +212,6 @@ export default function ManageSectionsPage() {
     if (!selectedSection) return
     setIsProcessing(true)
     try {
-      // Note: This doesn't un-assign students from the deleted section.
-      // A more robust solution might involve a cloud function.
       const batch = writeBatch(db);
       const schedulesSnapshot = await getDocs(collection(db, `sections/${selectedSection.id}/schedules`));
       schedulesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
@@ -244,7 +251,12 @@ export default function ManageSectionsPage() {
 
   const openScheduleDialog = (section: Section, schedule?: Schedule) => {
     setCurrentSectionForSchedule(section);
-    setSelectedSchedule(schedule || { id: 'new', subject: '', dayOfWeek: '', startTime: '', endTime: '', facultyId: '' });
+    if (schedule) { // Editing existing schedule
+        setSelectedSchedule(schedule);
+    } else { // Creating new schedule(s)
+        setSelectedSchedule(null);
+        setNewSchedules([{ subject: '', dayOfWeek: '', startTime: '', endTime: '', facultyId: '' }]);
+    }
     setIsScheduleDialogOpen(true);
   };
 
@@ -259,6 +271,24 @@ export default function ManageSectionsPage() {
         return acc;
     }, {} as Record<string, Schedule[]>);
   }, [schedules]);
+
+  const handleNewScheduleChange = (index: number, field: keyof Schedule, value: string) => {
+    const updatedSchedules = [...newSchedules];
+    updatedSchedules[index] = { ...updatedSchedules[index], [field]: value };
+    setNewSchedules(updatedSchedules);
+  };
+
+  const addScheduleForm = () => {
+    setNewSchedules([...newSchedules, { subject: '', dayOfWeek: '', startTime: '', endTime: '', facultyId: '' }]);
+  };
+
+  const removeScheduleForm = (index: number) => {
+    if (newSchedules.length > 1) {
+        const updatedSchedules = newSchedules.filter((_, i) => i !== index);
+        setNewSchedules(updatedSchedules);
+    }
+  };
+
 
   return (
     <DashboardLayout role="admin">
@@ -415,51 +445,107 @@ export default function ManageSectionsPage() {
             }
             setIsScheduleDialogOpen(isOpen);
         }}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl">
           <form onSubmit={handleScheduleSubmit}>
             <DialogHeader>
-              <DialogTitle>{selectedSchedule?.id === 'new' ? 'Create Schedule' : 'Edit Schedule'}</DialogTitle>
+              <DialogTitle>{selectedSchedule ? 'Edit Schedule' : 'Create Schedules'}</DialogTitle>
               <DialogDescription>For section: {currentSectionForSchedule?.name}</DialogDescription>
             </DialogHeader>
-            <div className="py-4 space-y-4">
-                <div className="grid gap-1.5">
-                    <Label htmlFor="subject">Subject</Label>
-                    <Input id="subject" value={selectedSchedule?.subject || ''} onChange={e => setSelectedSchedule(s => s ? {...s, subject: e.target.value} : null)} required />
-                </div>
-                 <div className="grid gap-1.5">
-                    <Label htmlFor="faculty">Faculty</Label>
-                    <Select value={selectedSchedule?.facultyId} onValueChange={value => setSelectedSchedule(s => s ? {...s, facultyId: value} : null)} required>
-                        <SelectTrigger id="faculty"><SelectValue placeholder="Select faculty" /></SelectTrigger>
-                        <SelectContent>
-                            {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                 <div className="grid gap-1.5">
-                    <Label htmlFor="dayOfWeek">Day of Week</Label>
-                    <Select value={selectedSchedule?.dayOfWeek} onValueChange={value => setSelectedSchedule(s => s ? {...s, dayOfWeek: value} : null)} required>
-                        <SelectTrigger id="dayOfWeek"><SelectValue placeholder="Select day" /></SelectTrigger>
-                        <SelectContent>
-                           {daysOfWeek.map(day => <SelectItem key={day} value={day}>{day}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="startTime">Start Time</Label>
-                        <Input id="startTime" type="time" value={selectedSchedule?.startTime || ''} onChange={e => setSelectedSchedule(s => s ? {...s, startTime: e.target.value} : null)} required />
+            <ScrollArea className="max-h-[60vh] p-1">
+                <div className="p-4 space-y-6">
+                {selectedSchedule ? (
+                    // Edit Form for a single schedule
+                    <div className="space-y-4 p-1">
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="subject">Subject</Label>
+                            <Input id="subject" value={selectedSchedule.subject} onChange={e => setSelectedSchedule(s => s ? {...s, subject: e.target.value} : null)} required />
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="faculty">Faculty</Label>
+                            <Select value={selectedSchedule.facultyId} onValueChange={value => setSelectedSchedule(s => s ? {...s, facultyId: value} : null)} required>
+                                <SelectTrigger id="faculty"><SelectValue placeholder="Select faculty" /></SelectTrigger>
+                                <SelectContent>
+                                    {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="dayOfWeek">Day of Week</Label>
+                            <Select value={selectedSchedule.dayOfWeek} onValueChange={value => setSelectedSchedule(s => s ? {...s, dayOfWeek: value} : null)} required>
+                                <SelectTrigger id="dayOfWeek"><SelectValue placeholder="Select day" /></SelectTrigger>
+                                <SelectContent>
+                                {daysOfWeek.map(day => <SelectItem key={day} value={day}>{day}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="startTime">Start Time</Label>
+                                <Input id="startTime" type="time" value={selectedSchedule.startTime} onChange={e => setSelectedSchedule(s => s ? {...s, startTime: e.target.value} : null)} required />
+                            </div>
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="endTime">End Time</Label>
+                                <Input id="endTime" type="time" value={selectedSchedule.endTime} onChange={e => setSelectedSchedule(s => s ? {...s, endTime: e.target.value} : null)} required />
+                            </div>
+                        </div>
                     </div>
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="endTime">End Time</Label>
-                        <Input id="endTime" type="time" value={selectedSchedule?.endTime || ''} onChange={e => setSelectedSchedule(s => s ? {...s, endTime: e.target.value} : null)} required />
-                    </div>
+                ) : (
+                    // Create Form for multiple schedules
+                    newSchedules.map((schedule, index) => (
+                        <div key={index} className="p-4 border rounded-md relative space-y-4">
+                             {newSchedules.length > 1 && (
+                                <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-muted-foreground hover:text-destructive" onClick={() => removeScheduleForm(index)}>
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            )}
+                            <div className="grid gap-1.5">
+                                <Label htmlFor={`subject-${index}`}>Subject</Label>
+                                <Input id={`subject-${index}`} value={schedule.subject} onChange={e => handleNewScheduleChange(index, 'subject', e.target.value)} required />
+                            </div>
+                            <div className="grid gap-1.5">
+                                <Label htmlFor={`faculty-${index}`}>Faculty</Label>
+                                <Select value={schedule.facultyId} onValueChange={value => handleNewScheduleChange(index, 'facultyId', value)} required>
+                                    <SelectTrigger id={`faculty-${index}`}><SelectValue placeholder="Select faculty" /></SelectTrigger>
+                                    <SelectContent>
+                                        {faculty.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-1.5">
+                                <Label htmlFor={`dayOfWeek-${index}`}>Day of Week</Label>
+                                <Select value={schedule.dayOfWeek} onValueChange={value => handleNewScheduleChange(index, 'dayOfWeek', value)} required>
+                                    <SelectTrigger id={`dayOfWeek-${index}`}><SelectValue placeholder="Select day" /></SelectTrigger>
+                                    <SelectContent>
+                                    {daysOfWeek.map(day => <SelectItem key={day} value={day}>{day}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor={`startTime-${index}`}>Start Time</Label>
+                                    <Input id={`startTime-${index}`} type="time" value={schedule.startTime} onChange={e => handleNewScheduleChange(index, 'startTime', e.target.value)} required />
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor={`endTime-${index}`}>End Time</Label>
+                                    <Input id={`endTime-${index}`} type="time" value={schedule.endTime} onChange={e => handleNewScheduleChange(index, 'endTime', e.target.value)} required />
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+                 {!selectedSchedule && (
+                    <Button type="button" variant="outline" onClick={addScheduleForm}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Add another schedule
+                    </Button>
+                )}
                 </div>
-            </div>
-            <DialogFooter>
+            </ScrollArea>
+            <DialogFooter className="pt-4">
                 <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
                 <Button type="submit" disabled={isProcessing}>
                     {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Schedule
+                    {selectedSchedule ? 'Save Changes' : 'Save Schedules'}
                 </Button>
             </DialogFooter>
           </form>
