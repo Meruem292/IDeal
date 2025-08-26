@@ -15,12 +15,12 @@ import {
   Home,
   User,
   BookUser,
-  ShieldCheck,
   CheckCircle,
   LogOut,
   Settings,
   UserPlus,
   Users,
+  ClipboardList,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
@@ -55,6 +55,7 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
     { href: "/admin/manage-faculty", label: "Manage Faculty", icon: Users },
     { href: "/admin/manage-students", label: "Manage Students", icon: BookUser },
     { href: "/admin/create-faculty", label: "Create Faculty", icon: UserPlus },
+    { href: "/admin/manage-sections", label: "Manage Sections", icon: ClipboardList },
   ],
 }
 

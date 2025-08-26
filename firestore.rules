@@ -3,29 +3,41 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if a user is an admin
+    // Helper function to check for admin role
     function isAdmin() {
       return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Students can register (create their own document). Admins can do anything.
+    // Students can register (create their own document)
     match /students/{userId} {
-      allow create: if request.auth.uid == userId || isAdmin();
-      allow read, update, delete: if request.auth.uid == userId || isAdmin();
+      allow create: if request.auth != null && request.auth.uid == userId;
+      // Admins can do anything, users can read/update their own doc
+      allow read, update, delete: if isAdmin() || request.auth.uid == userId;
     }
 
-    // Admins are managed here.
-    match /admins/{userId} {
-        // A user can create their own admin document (to bootstrap the first admin)
-        allow create: if request.auth.uid == userId;
-        // Only other admins can manage admins.
-        allow read, update, delete: if isAdmin();
-    }
-
-    // Faculty can be managed by admins. They can manage their own document.
+    // Users can read all faculty for display purposes
     match /faculty/{userId} {
-      allow create: if isAdmin();
-      allow read, update, delete: if request.auth.uid == userId || isAdmin();
+      allow read: if request.auth != null;
+      // Only admins can create, update, or delete faculty
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Allow users to create their own admin doc. For bootstrapping.
+    // In production, you might remove this and manage admins manually or via a backend function.
+    match /admins/{userId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+        // Admins can read other admin documents (e.g. for a list of admins)
+        allow list: if isAdmin();
+    }
+
+    // Admins have full access to sections
+    match /sections/{sectionId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Admins have full access to schedules
+    match /sections/{sectionId}/schedules/{scheduleId} {
+       allow read, write: if isAdmin();
     }
   }
 }

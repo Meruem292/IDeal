@@ -13,6 +13,8 @@ export type Student = {
     contactNumber: string
   }
   rfid: string | null
+  sectionId?: string | null
+  section?: string
 }
 
 export type AttendanceRecord = {

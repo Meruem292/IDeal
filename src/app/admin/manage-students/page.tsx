@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Trash2, Edit, Fingerprint } from "lucide-react"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, doc, deleteDoc, updateDoc } from "firebase/firestore"
+import { collection, getDocs, doc, deleteDoc, updateDoc, writeBatch } from "firebase/firestore"
 import {
   Dialog,
   DialogContent,
@@ -34,10 +34,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import type { Student } from "@/lib/mock-data"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
-
+type Section = {
+  id: string
+  name: string
+}
 export default function ManageStudentsPage() {
   const [students, setStudents] = useState<Student[]>([])
+  const [sections, setSections] = useState<Section[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
@@ -45,16 +56,27 @@ export default function ManageStudentsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const { toast } = useToast()
 
-  const fetchStudents = async () => {
+  const fetchStudentsAndSections = async () => {
     setIsLoading(true)
     try {
-      const querySnapshot = await getDocs(collection(db, "students"))
-      const studentList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student))
-      setStudents(studentList)
+      const studentsSnapshot = await getDocs(collection(db, "students"))
+      const studentList = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student))
+      
+      const sectionsSnapshot = await getDocs(collection(db, "sections"))
+      const sectionList = sectionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Section))
+
+      const studentsWithSectionNames = studentList.map(student => {
+        const section = sectionList.find(s => s.id === student.sectionId)
+        return { ...student, section: section?.name || "Unassigned" }
+      })
+
+      setStudents(studentsWithSectionNames)
+      setSections(sectionList)
+
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Error fetching students",
+        title: "Error fetching data",
         description: error.message,
       })
     } finally {
@@ -63,16 +85,24 @@ export default function ManageStudentsPage() {
   }
 
   useEffect(() => {
-    fetchStudents()
-  }, [toast])
+    fetchStudentsAndSections()
+  }, [])
 
   const handleDelete = async () => {
     if (!selectedStudent) return
     setIsProcessing(true)
     try {
-      await deleteDoc(doc(db, "students", selectedStudent.id))
+      // Also delete related attendance if any
+      const attendanceQuery = await getDocs(collection(db, `students/${selectedStudent.id}/attendance`));
+      const batch = writeBatch(db);
+      attendanceQuery.docs.forEach(doc => {
+          batch.delete(doc.ref);
+      });
+      batch.delete(doc(db, "students", selectedStudent.id));
+      await batch.commit();
+
       toast({ title: "Student Deleted", description: `Record for ${selectedStudent.firstName} ${selectedStudent.lastName} has been deleted.` })
-      fetchStudents() // Refresh list
+      fetchStudentsAndSections() // Refresh list
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -96,9 +126,10 @@ export default function ManageStudentsPage() {
         firstName: selectedStudent.firstName,
         lastName: selectedStudent.lastName,
         address: selectedStudent.address,
+        sectionId: selectedStudent.sectionId || null,
       });
       toast({ title: "Student Updated", description: "Student details have been updated." })
-      fetchStudents() // Refresh list
+      fetchStudentsAndSections() // Refresh list
     } catch (error: any) {
        toast({
         variant: "destructive",
@@ -141,6 +172,7 @@ export default function ManageStudentsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Section</TableHead>
                   <TableHead>Gender</TableHead>
                   <TableHead>RFID Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -150,6 +182,7 @@ export default function ManageStudentsPage() {
                 {students.map((student) => (
                   <TableRow key={student.id}>
                     <TableCell className="font-medium">{`${student.firstName} ${student.lastName}`}</TableCell>
+                    <TableCell>{student.section}</TableCell>
                     <TableCell>{student.gender}</TableCell>
                     <TableCell>
                       <Badge
@@ -198,6 +231,25 @@ export default function ManageStudentsPage() {
                <div className="grid gap-1.5">
                   <Label htmlFor="address">Address</Label>
                   <Input id="address" value={selectedStudent?.address || ''} onChange={(e) => setSelectedStudent(s => s ? {...s, address: e.target.value} : null)} required />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="section">Section</Label>
+                <Select
+                  value={selectedStudent?.sectionId || ""}
+                  onValueChange={(value) => setSelectedStudent(s => s ? { ...s, sectionId: value } : null)}
+                >
+                  <SelectTrigger id="section">
+                    <SelectValue placeholder="Assign a section" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Unassigned</SelectItem>
+                    {sections.map(section => (
+                      <SelectItem key={section.id} value={section.id}>
+                        {section.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>
