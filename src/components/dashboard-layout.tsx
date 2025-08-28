@@ -22,7 +22,6 @@ import {
   UserPlus,
   Users,
   ClipboardList,
-  ScanLine,
   History,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -59,7 +58,6 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
     { href: "/admin/manage-students", label: "Manage Students", icon: BookUser },
     { href: "/admin/create-faculty", label: "Create Faculty", icon: UserPlus },
     { href: "/admin/manage-sections", label: "Manage Sections", icon: ClipboardList },
-    { href: "/admin/scanner", label: "Scanner", icon: ScanLine },
     { href: "/admin/attendance", label: "Attendance Logs", icon: History },
   ],
 }
