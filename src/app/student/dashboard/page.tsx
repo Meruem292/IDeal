@@ -61,6 +61,7 @@ export default function StudentDashboardPage() {
                     
                     if (!studentData.rfid) {
                         setError("You have not registered an RFID card. Please register one on your profile page.");
+                        setLogs([]);
                         setIsLoading(false);
                         return;
                     }
@@ -102,7 +103,7 @@ export default function StudentDashboardPage() {
                                 date: date,
                                 timeIn: timeIn ? format(timeIn.toDate(), 'p') : null,
                                 timeOut: timeOut ? format(timeOut.toDate(), 'p') : null,
-                                status: timeIn ? "Present" : "Absent",
+                                status: "Present",
                             };
                         })
                         .filter((record): record is ProcessedAttendanceRecord => record !== null)
