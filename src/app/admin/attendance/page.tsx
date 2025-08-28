@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore"
+import { collection, getDocs, query, orderBy } from "firebase/firestore"
 import { Loader2 } from "lucide-react"
 import type { Student } from "@/lib/mock-data"
 import { format } from 'date-fns';
