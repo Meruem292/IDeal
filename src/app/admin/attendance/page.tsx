@@ -92,7 +92,7 @@ export default function AttendancePage() {
                          <div className="flex justify-center items-center h-40">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                         </div>
-                    ) : (
+                    ) : logs.length > 0 ? (
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -111,6 +111,10 @@ export default function AttendancePage() {
                                 ))}
                             </TableBody>
                         </Table>
+                    ) : (
+                         <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+                            <p>No attendance records found in the system.</p>
+                        </div>
                     )}
                 </CardContent>
             </Card>

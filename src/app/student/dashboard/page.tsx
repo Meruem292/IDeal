@@ -19,17 +19,15 @@ import {
 } from "@/components/ui/table"
 import { Loader2, AlertCircle } from "lucide-react"
 import { auth, db } from "@/lib/firebase"
-import { collection, query, where, orderBy, doc, getDoc, onSnapshot } from "firebase/firestore"
+import { collection, query, where, orderBy, onSnapshot, getDoc, doc } from "firebase/firestore"
 import { format } from "date-fns"
 import type { Student } from "@/lib/mock-data"
-
 
 type RawScan = {
     id: string;
     timestamp: any; // Firestore Timestamp
     uid: string;
 };
-
 
 export default function StudentDashboardPage() {
     const [logs, setLogs] = useState<RawScan[]>([]);
@@ -41,7 +39,8 @@ export default function StudentDashboardPage() {
             if (user) {
                 setIsLoading(true);
                 setError(null);
-                
+                let historyUnsubscribe: (() => void) | undefined;
+
                 try {
                     const studentDocRef = doc(db, "students", user.uid);
                     const studentDoc = await getDoc(studentDocRef);
@@ -59,7 +58,7 @@ export default function StudentDashboardPage() {
                         return;
                     }
 
-                    const studentRfid = studentData.rfid;
+                    const studentRfid = studentData.rfid.toUpperCase();
 
                     const q = query(
                         collection(db, "rfid_history"),
@@ -68,7 +67,7 @@ export default function StudentDashboardPage() {
                     );
 
                     // Use onSnapshot for real-time updates
-                    const historyUnsubscribe = onSnapshot(q, (querySnapshot) => {
+                    historyUnsubscribe = onSnapshot(q, (querySnapshot) => {
                         const rawScans: RawScan[] = [];
                         querySnapshot.forEach((doc) => {
                             const data = doc.data();
@@ -86,14 +85,17 @@ export default function StudentDashboardPage() {
                         setIsLoading(false);
                     });
 
-                    // Return the unsubscribe function for the history listener
-                    return () => historyUnsubscribe();
-
                 } catch (err: any) {
                     console.error("Error setting up history listener: ", err);
                     setError(err.message || "Failed to set up history listener.");
                     setIsLoading(false);
                 }
+                
+                return () => {
+                    if (historyUnsubscribe) {
+                        historyUnsubscribe();
+                    }
+                };
 
             } else {
                 setIsLoading(false);
@@ -102,7 +104,6 @@ export default function StudentDashboardPage() {
             }
         });
 
-        // Return the unsubscribe function for the auth listener
         return () => authUnsubscribe();
 
     }, []);
