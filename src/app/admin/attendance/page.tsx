@@ -18,14 +18,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, doc, collectionGroup, orderBy, query } from "firebase/firestore"
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore"
 import { Loader2 } from "lucide-react"
 import type { Student } from "@/lib/mock-data"
 import { format } from 'date-fns';
 
 type AttendanceLog = {
     id: string;
-    studentId: string;
     studentName: string;
     rfid: string;
     timestamp: any; // Firestore Timestamp
@@ -41,37 +40,32 @@ export default function AttendancePage() {
         const fetchAttendance = async () => {
             setIsLoading(true);
             try {
-                // 1. Fetch all students to map IDs to names
+                // 1. Fetch all students to create a map from RFID to Student Name
                 const studentsSnapshot = await getDocs(collection(db, "students"));
-                const studentMap = new Map<string, {name: string, rfid: string}>();
+                const rfidToStudentMap = new Map<string, string>();
                 studentsSnapshot.forEach(doc => {
                     const student = doc.data() as Student;
-                    studentMap.set(doc.id, { 
-                        name: `${student.firstName} ${student.lastName}`,
-                        rfid: student.rfid || 'N/A'
-                    });
+                    if (student.rfid) {
+                        rfidToStudentMap.set(student.rfid, `${student.firstName} ${student.lastName}`);
+                    }
                 });
 
-                // 2. Fetch all attendance records from the collection group
-                const attendanceQuery = query(collectionGroup(db, 'attendance'), orderBy('timestamp', 'desc'));
-                const attendanceSnapshot = await getDocs(attendanceQuery);
+                // 2. Fetch all attendance records from the rfid_history collection
+                const historyQuery = query(collection(db, 'rfid_history'), orderBy('timestamp', 'desc'));
+                const historySnapshot = await getDocs(historyQuery);
                 
                 const attendanceList: AttendanceLog[] = [];
-                attendanceSnapshot.forEach(doc => {
+                historySnapshot.forEach(doc => {
                     const data = doc.data();
-                    const studentId = doc.ref.parent.parent?.id || '';
-                    const studentInfo = studentMap.get(studentId);
+                    const studentName = rfidToStudentMap.get(data.uid) || 'Unknown Student';
 
-                    if (studentInfo) {
-                        attendanceList.push({
-                            id: doc.id,
-                            studentId,
-                            studentName: studentInfo.name,
-                            rfid: studentInfo.rfid,
-                            timestamp: data.timestamp,
-                            type: data.type
-                        });
-                    }
+                    attendanceList.push({
+                        id: doc.id,
+                        studentName: studentName,
+                        rfid: data.uid,
+                        timestamp: data.timestamp,
+                        type: data.type,
+                    });
                 });
 
                 setLogs(attendanceList);
@@ -91,7 +85,7 @@ export default function AttendancePage() {
                 <CardHeader>
                     <CardTitle>Attendance Log</CardTitle>
                     <CardDescription>
-                        A real-time log of all RFID scans.
+                        A real-time log of all RFID scans from the central history.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
