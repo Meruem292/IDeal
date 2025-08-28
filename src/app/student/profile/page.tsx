@@ -1,5 +1,6 @@
+
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import {
   Card,
@@ -12,31 +13,168 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { mockStudents } from "@/lib/mock-data"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
+import { auth, db } from "@/lib/firebase"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
+import type { Student } from "@/lib/mock-data"
+import { Skeleton } from "@/components/ui/skeleton"
+
+function ProfileSkeleton() {
+    return (
+        <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-8 w-32" />
+                    <Skeleton className="h-4 w-48" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"> <Skeleton className="h-4 w-20" /> <Skeleton className="h-5 w-24" /> </div>
+                        <div className="space-y-2"> <Skeleton className="h-4 w-20" /> <Skeleton className="h-5 w-24" /> </div>
+                        <div className="space-y-2"> <Skeleton className="h-4 w-20" /> <Skeleton className="h-5 w-24" /> </div>
+                        <div className="space-y-2"> <Skeleton className="h-4 w-12" /> <Skeleton className="h-5 w-16" /> </div>
+                        <div className="space-y-2"> <Skeleton className="h-4 w-16" /> <Skeleton className="h-5 w-20" /> </div>
+                        <div className="space-y-2"> <Skeleton className="h-4 w-20" /> <Skeleton className="h-5 w-28" /> </div>
+                     </div>
+                     <div className="space-y-2"> <Skeleton className="h-4 w-20" /> <Skeleton className="h-5 w-full" /> </div>
+                     <div className="space-y-2"> <Skeleton className="h-4 w-24" /> <Skeleton className="h-5 w-32" /> </div>
+                </CardContent>
+            </Card>
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader><Skeleton className="h-8 w-40" /></CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2"> <Skeleton className="h-4 w-24" /> <Skeleton className="h-5 w-36" /> </div>
+                        <div className="space-y-2"> <Skeleton className="h-4 w-20" /> <Skeleton className="h-5 w-24" /> </div>
+                        <div className="space-y-2"> <Skeleton className="h-4 w-28" /> <Skeleton className="h-5 w-32" /> </div>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader>
+                        <Skeleton className="h-8 w-40" />
+                        <Skeleton className="h-4 w-full" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid w-full max-w-sm items-center gap-1.5">
+                            <Skeleton className="h-4 w-24" />
+                            <Skeleton className="h-10 w-full" />
+                        </div>
+                    </CardContent>
+                    <CardFooter>
+                        <Skeleton className="h-10 w-28" />
+                    </CardFooter>
+                </Card>
+            </div>
+        </div>
+    )
+}
 
 export default function StudentProfilePage() {
-  const student = mockStudents[0] // Mocking the logged-in student as Alice
-  const [rfid, setRfid] = useState(student.rfid || "")
-  const [isLoading, setIsLoading] = useState(false)
+  const [student, setStudent] = useState<Student | null>(null)
+  const [rfid, setRfid] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        try {
+          const studentDocRef = doc(db, "students", user.uid)
+          const studentDoc = await getDoc(studentDocRef)
+
+          if (studentDoc.exists()) {
+            const studentData = studentDoc.data() as Student
+            setStudent(studentData)
+            setRfid(studentData.rfid || "")
+          } else {
+            setError("No student profile found for your account.")
+          }
+        } catch (err) {
+          console.error("Error fetching student profile:", err)
+          setError("Failed to fetch your profile. Please try again later.")
+        } finally {
+          setIsLoading(false)
+        }
+      } else {
+        // Handle case where user is not logged in
+        setIsLoading(false)
+        setError("You must be logged in to view this page.")
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
-    setTimeout(() => {
-      setIsLoading(false)
+    if (!auth.currentUser) {
+      toast({
+        variant: "destructive",
+        title: "Not Authenticated",
+        description: "You must be logged in to update your profile.",
+      })
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const studentDocRef = doc(db, "students", auth.currentUser.uid)
+      await updateDoc(studentDocRef, { rfid: rfid || null })
+
+      // Also update local state
+      if(student) {
+        setStudent({...student, rfid: rfid || null});
+      }
+
       toast({
         title: "Profile Updated",
         description: "Your RFID has been successfully saved.",
       })
-    }, 1000)
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: err.message || "An unknown error occurred.",
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const getFullName = () => {
-    return `${student.firstName} ${student.middleName || ''} ${student.lastName}`.replace(/\s+/g, ' ');
+  if (isLoading) {
+    return (
+        <DashboardLayout role="student">
+            <ProfileSkeleton />
+        </DashboardLayout>
+    )
   }
+
+  if (error) {
+    return (
+        <DashboardLayout role="student">
+            <div className="flex flex-col items-center justify-center h-full rounded-lg border-2 border-dashed border-destructive text-destructive p-8">
+                <AlertCircle className="h-12 w-12 mb-4" />
+                <h2 className="text-xl font-semibold">An Error Occurred</h2>
+                <p>{error}</p>
+            </div>
+        </DashboardLayout>
+    )
+  }
+  
+  if (!student) {
+     return (
+        <DashboardLayout role="student">
+             <div className="flex flex-col items-center justify-center h-full rounded-lg border-2 border-dashed p-8">
+                <h2 className="text-xl font-semibold">No Profile Data</h2>
+                <p>We couldn't find your student profile.</p>
+            </div>
+        </DashboardLayout>
+    )
+  }
+
 
   return (
     <DashboardLayout role="student">
@@ -81,7 +219,7 @@ export default function StudentProfilePage() {
               </div>
             <div>
               <Label>Student ID</Label>
-              <p className="font-semibold">{student.id}</p>
+              <p className="font-semibold font-mono text-xs">{student.id}</p>
             </div>
              
           </CardContent>
@@ -120,16 +258,17 @@ export default function StudentProfilePage() {
                     <Input
                       type="text"
                       id="rfid"
-                      placeholder="e.g., A1B2C3D4"
+                      placeholder="e.g., 766EF94D"
                       value={rfid}
                       onChange={(e) => setRfid(e.target.value.toUpperCase())}
                       className="font-mono"
+                      disabled={isSaving}
                     />
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Button type="submit" disabled={isSaving}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Save RFID
                   </Button>
                 </CardFooter>
