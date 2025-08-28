@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table"
 import { Loader2, AlertCircle } from "lucide-react"
 import { auth, db } from "@/lib/firebase"
-import { collection, query, where, orderBy, onSnapshot, getDoc, doc } from "firebase/firestore"
+import { collection, query, where, onSnapshot } from "firebase/firestore"
 import { format } from "date-fns"
 import type { Student } from "@/lib/mock-data"
 
@@ -34,7 +34,7 @@ const formatScanTime = (timeStr: string) => {
     try {
         const timestamp = parseInt(timeStr, 10);
         // Firestore uses seconds for Unix time, so multiply by 1000 for JS Date
-        return format(new Date(timestamp * 1000), 'PPP p');
+        return format(new Date(timestamp * 1000), 'Pp');
     } catch (e) {
         console.error("Invalid time format:", timeStr, e);
         return "Invalid Date";
@@ -50,15 +50,17 @@ export default function StudentDashboardPage() {
     useEffect(() => {
         const authUnsubscribe = auth.onAuthStateChanged((user) => {
             if (user) {
+                // We start by getting the student's RFID from their profile.
                 const studentDocRef = doc(db, "students", user.uid);
                 
-                const getHistory = async () => {
+                // This will be our real-time listener for the history collection
+                let historyUnsubscribe: (() => void) | undefined;
+
+                const getStudentAndListenForHistory = async () => {
                     setIsLoading(true);
                     setError(null);
-                    let historyUnsubscribe: (() => void) | undefined;
-                    
                     try {
-                        const studentDoc = await getDoc(studentDocRef);
+                         const studentDoc = await getDoc(studentDocRef);
                         if (!studentDoc.exists()) {
                             throw new Error("Student profile not found.");
                         }
@@ -74,11 +76,10 @@ export default function StudentDashboardPage() {
 
                         const studentRfid = studentData.rfid.toUpperCase();
 
-                        // Corrected query: using 'time' field for ordering as seen in screenshot
+                        // Now that we have the RFID, we set up the real-time listener
                         const q = query(
                             collection(db, "rfid_history"),
-                            where("uid", "==", studentRfid),
-                            orderBy("time", "desc")
+                            where("uid", "==", studentRfid)
                         );
 
                         historyUnsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -91,11 +92,13 @@ export default function StudentDashboardPage() {
                                     time: data.time,
                                 });
                             });
+                            // Sort the list in the browser since Firestore can't sort strings numerically
+                            rawScans.sort((a, b) => parseInt(b.time, 10) - parseInt(a.time, 10));
+
                             setLogs(rawScans);
                             setIsLoading(false);
                         }, (err) => {
                             console.error("Error fetching attendance history: ", err);
-                            // This might indicate a missing index if 'time' field is also used for sorting
                             if (err.message.includes("requires an index")) {
                                 setError("The database query requires a new index. Please check the developer console for a link to create it in Firebase.");
                             } else {
@@ -109,16 +112,16 @@ export default function StudentDashboardPage() {
                         setError(err.message || "An error occurred while fetching your data.");
                         setIsLoading(false);
                     }
-
-                    // Cleanup on unmount
-                    return () => {
-                        if (historyUnsubscribe) {
-                            historyUnsubscribe();
-                        }
-                    };
                 };
 
-                getHistory();
+                getStudentAndListenForHistory();
+                
+                // Cleanup on component unmount
+                return () => {
+                    if (historyUnsubscribe) {
+                        historyUnsubscribe();
+                    }
+                };
 
             } else {
                 setIsLoading(false);
