@@ -23,6 +23,7 @@ import {
   Users,
   ClipboardList,
   History,
+  Fingerprint,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
@@ -40,6 +41,7 @@ import { signOut } from "firebase/auth"
 import { useToast } from "@/hooks/use-toast"
 import { useState, useEffect } from "react"
 import type { User as FirebaseAuthUser } from "firebase/auth"
+import { SheetTitle, SheetDescription } from "@/components/ui/sheet"
 
 type UserRole = "student" | "faculty" | "admin"
 
@@ -59,6 +61,7 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
     { href: "/admin/create-faculty", label: "Create Faculty", icon: UserPlus },
     { href: "/admin/manage-sections", label: "Manage Sections", icon: ClipboardList },
     { href: "/admin/attendance", label: "Attendance Logs", icon: History },
+    { href: "/admin/rfid-history", label: "RFID History", icon: Fingerprint },
   ],
 }
 
@@ -155,6 +158,8 @@ export function DashboardLayout({
           </div>
         </SidebarHeader>
         <SidebarContent>
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+          <SheetDescription className="sr-only">Contains the main navigation links for the application.</SheetDescription>
           <SidebarMenu>
             {navItems[role].map((item) => (
               <SidebarMenuItem key={item.href}>
