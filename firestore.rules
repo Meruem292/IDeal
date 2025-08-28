@@ -18,33 +18,39 @@ service cloud.firestore {
 
     // --- Collection Rules ---
 
-    // Admins can be created by the user themselves (to solve bootstrap issue)
-    // Only other admins can read or delete them.
     match /admins/{userId} {
       allow read, delete: if isAdmin();
-      allow create: if isSelf(userId);
+      // Only an authenticated user can create their own admin doc, which is later approved.
+      // Or an existing admin can create another admin.
+      allow create: if isSelf(userId) || isAdmin();
     }
 
-    // Students can be created by anyone via the registration form.
-    // Only Admins can manage student records after creation.
-    // Authenticated users can read student lists.
     match /students/{studentId} {
-      allow create: if isAuth();
-      allow read: if isAuth();
-      allow update, delete: if isAdmin();
+      // Any authenticated user (e.g., during registration) can create a student record.
+      allow create: if isAuth(); 
+      // An admin or the student themselves can read the profile.
+      allow read: if isAdmin() || isSelf(studentId);
+      // Only an admin or the student themselves can update their profile (e.g. for RFID).
+      allow update: if isAdmin() || isSelf(studentId);
+      // Only an admin can delete a student.
+      allow delete: if isAdmin();
 
-      // Sub-collections would go here if needed
+      // Rules for the attendance sub-collection
+      match /attendance/{attendanceId} {
+        // An admin can create records (simulating the scanner)
+        allow create: if isAdmin();
+        // The student themselves or an admin can read the attendance records.
+        allow read: if isSelf(studentId) || isAdmin();
+        // Only admins can modify or delete specific attendance logs.
+        allow update, delete: if isAdmin();
+      }
     }
 
-    // Faculty can only be managed by Admins.
-    // Any authenticated user can read faculty data (e.g., for schedules).
     match /faculty/{facultyId} {
       allow read: if isAuth();
       allow create, update, delete: if isAdmin();
     }
     
-    // Sections and their schedules can only be managed by Admins.
-    // Any authenticated user can read them.
     match /sections/{sectionId} {
       allow read: if isAuth();
       allow create, update, delete: if isAdmin();
