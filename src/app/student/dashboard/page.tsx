@@ -1,4 +1,3 @@
-
 "use client"
 import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
@@ -35,77 +34,83 @@ export default function StudentDashboardPage() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const authUnsubscribe = auth.onAuthStateChanged(async (user) => {
+        const authUnsubscribe = auth.onAuthStateChanged((user) => {
             if (user) {
-                setIsLoading(true);
-                setError(null);
-                let historyUnsubscribe: (() => void) | undefined;
-
-                try {
-                    const studentDocRef = doc(db, "students", user.uid);
-                    const studentDoc = await getDoc(studentDocRef);
-
-                    if (!studentDoc.exists()) {
-                        throw new Error("Student profile not found.");
-                    }
-                    
-                    const studentData = studentDoc.data() as Student;
-                    
-                    if (!studentData.rfid) {
-                        setError("You have not registered an RFID card. Please register one on your profile page.");
-                        setLogs([]);
-                        setIsLoading(false);
-                        return;
-                    }
-
-                    const studentRfid = studentData.rfid.toUpperCase();
-
-                    const q = query(
-                        collection(db, "rfid_history"),
-                        where("uid", "==", studentRfid),
-                        orderBy("timestamp", "desc")
-                    );
-
-                    // Use onSnapshot for real-time updates
-                    historyUnsubscribe = onSnapshot(q, (querySnapshot) => {
-                        const rawScans: RawScan[] = [];
-                        querySnapshot.forEach((doc) => {
-                            const data = doc.data();
-                            rawScans.push({
-                                id: doc.id,
-                                uid: data.uid,
-                                timestamp: data.timestamp,
-                            });
-                        });
-                        setLogs(rawScans);
-                        setIsLoading(false);
-                    }, (err) => {
-                        console.error("Error fetching attendance history: ", err);
-                        setError(err.message || "Failed to fetch your attendance history.");
-                        setIsLoading(false);
-                    });
-
-                } catch (err: any) {
-                    console.error("Error setting up history listener: ", err);
-                    setError(err.message || "Failed to set up history listener.");
-                    setIsLoading(false);
-                }
+                const studentDocRef = doc(db, "students", user.uid);
                 
-                return () => {
-                    if (historyUnsubscribe) {
-                        historyUnsubscribe();
+                const getHistory = async () => {
+                    setIsLoading(true);
+                    setError(null);
+                    let historyUnsubscribe: (() => void) | undefined;
+                    
+                    try {
+                        const studentDoc = await getDoc(studentDocRef);
+                        if (!studentDoc.exists()) {
+                            throw new Error("Student profile not found.");
+                        }
+                        
+                        const studentData = studentDoc.data() as Student;
+                        
+                        if (!studentData.rfid) {
+                            setError("You have not registered an RFID card. Please register one on your profile page.");
+                            setLogs([]);
+                            setIsLoading(false);
+                            return;
+                        }
+
+                        const studentRfid = studentData.rfid.toUpperCase();
+
+                        const q = query(
+                            collection(db, "rfid_history"),
+                            where("uid", "==", studentRfid),
+                            orderBy("timestamp", "desc")
+                        );
+
+                        // Use onSnapshot for real-time updates
+                        historyUnsubscribe = onSnapshot(q, (querySnapshot) => {
+                            const rawScans: RawScan[] = [];
+                            querySnapshot.forEach((doc) => {
+                                const data = doc.data();
+                                rawScans.push({
+                                    id: doc.id,
+                                    uid: data.uid,
+                                    timestamp: data.timestamp,
+                                });
+                            });
+                            setLogs(rawScans);
+                            setIsLoading(false);
+                        }, (err) => {
+                            console.error("Error fetching attendance history: ", err);
+                            setError(err.message || "Failed to fetch your attendance history.");
+                            setIsLoading(false);
+                        });
+
+                    } catch (err: any) {
+                        console.error("Error setting up history listener: ", err);
+                        setError(err.message || "An error occurred while fetching your data.");
+                        setIsLoading(false);
                     }
+
+                    // This function will be returned and called when the component unmounts
+                    return () => {
+                        if (historyUnsubscribe) {
+                            historyUnsubscribe();
+                        }
+                    };
                 };
 
+                getHistory();
+
             } else {
+                // User is signed out
                 setIsLoading(false);
                 setError("You must be logged in to view your dashboard.");
                 setLogs([]);
             }
         });
 
+        // Cleanup the auth subscription
         return () => authUnsubscribe();
-
     }, []);
 
   return (
@@ -125,7 +130,7 @@ export default function StudentDashboardPage() {
             ) : error ? (
                 <div className="flex flex-col items-center justify-center h-full rounded-lg border-2 border-dashed border-destructive/50 bg-destructive/10 text-destructive p-8 text-center">
                     <AlertCircle className="h-10 w-10 mb-4" />
-                    <h2 className="text-xl font-semibold mb-2">Could Not Load Attendance</h2>
+                    <h2 className="text-xl font-semibold mb-2">Could Not Load History</h2>
                     <p>{error}</p>
                 </div>
             ) : logs.length > 0 ? (
