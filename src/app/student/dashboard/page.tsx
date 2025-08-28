@@ -17,8 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Check, X, Clock, Loader2, AlertCircle } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
 import { auth, db } from "@/lib/firebase"
 import { collection, query, where, orderBy, getDocs, doc, getDoc } from "firebase/firestore"
 import { format } from "date-fns"
@@ -31,16 +30,9 @@ type RawScan = {
     uid: string;
 };
 
-type ProcessedAttendanceRecord = {
-    date: string;
-    timeIn: string | null;
-    timeOut: string | null;
-    status: "Present" | "Absent"; 
-}
-
 
 export default function StudentDashboardPage() {
-    const [logs, setLogs] = useState<ProcessedAttendanceRecord[]>([]);
+    const [logs, setLogs] = useState<RawScan[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -66,50 +58,25 @@ export default function StudentDashboardPage() {
                         return;
                     }
 
-                    // 2. Query rfid_history with the student's RFID (ensuring uppercase comparison)
+                    // 2. Query rfid_history with the student's RFID 
                     const q = query(
                         collection(db, "rfid_history"), 
-                        where("uid", "==", studentData.rfid.toUpperCase()),
+                        where("uid", "==", studentData.rfid),
                         orderBy("timestamp", "desc")
                     );
                     const querySnapshot = await getDocs(q);
                     
-                    const attendanceByDate: {[key: string]: {scans: any[]}} = {};
-
-                    // Group scans by date
+                    const rawScans: RawScan[] = [];
                     querySnapshot.forEach(doc => {
                         const data = doc.data();
-                        const dateStr = format(data.timestamp.toDate(), 'yyyy-MM-dd');
-                        
-                        if (!attendanceByDate[dateStr]) {
-                            attendanceByDate[dateStr] = { scans: [] };
-                        }
-                        attendanceByDate[dateStr].scans.push(data.timestamp);
+                        rawScans.push({
+                            id: doc.id,
+                            uid: data.uid,
+                            timestamp: data.timestamp,
+                        });
                     });
 
-                    // 3. Process the grouped scans
-                    const processedRecords: ProcessedAttendanceRecord[] = Object.entries(attendanceByDate)
-                        .map(([date, {scans}]) => {
-                             if (scans.length === 0) {
-                                return null;
-                            }
-                            // Sort scans to find the earliest (timeIn) and latest (timeOut)
-                            scans.sort((a, b) => a.toMillis() - b.toMillis());
-                            
-                            const timeIn = scans[0];
-                            const timeOut = scans.length > 1 ? scans[scans.length - 1] : null;
-
-                            return {
-                                date: date,
-                                timeIn: timeIn ? format(timeIn.toDate(), 'p') : null,
-                                timeOut: timeOut ? format(timeOut.toDate(), 'p') : null,
-                                status: "Present",
-                            };
-                        })
-                        .filter((record): record is ProcessedAttendanceRecord => record !== null)
-                        .sort((a,b) => b.date.localeCompare(a.date)); // Sort by date descending
-
-                    setLogs(processedRecords);
+                    setLogs(rawScans);
 
                 } catch (err: any) {
                     console.error("Error fetching attendance history: ", err);
@@ -126,9 +93,6 @@ export default function StudentDashboardPage() {
         return () => unsubscribe();
 
     }, []);
-
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const todayRecord = logs.find(log => log.date === todayStr) || null;
 
   if (isLoading) {
     return (
@@ -156,46 +120,11 @@ export default function StudentDashboardPage() {
   return (
     <DashboardLayout role="student">
       <div className="grid gap-6">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardDescription>Today's Status</CardDescription>
-              <CardTitle className="flex items-center gap-2">
-                 {todayRecord ? (
-                    todayRecord.status === "Present" ? (
-                      <Check className="text-green-500" />
-                    ) : (
-                      <X className="text-red-500" />
-                    )
-                ) : <X className="text-red-500" />}
-                {todayRecord?.status || "Absent"}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardDescription>Time In</CardDescription>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="text-blue-500" />
-                {todayRecord?.timeIn || "N/A"}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardDescription>Time Out</CardDescription>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="text-purple-500" />
-                {todayRecord?.timeOut || "N/A"}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
         <Card>
           <CardHeader>
-            <CardTitle>My Attendance History</CardTitle>
+            <CardTitle>My Raw Scan History</CardTitle>
             <CardDescription>
-              A log of your recent attendance records from RFID scans.
+              A direct log of all your RFID scan events, from newest to oldest.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -203,30 +132,15 @@ export default function StudentDashboardPage() {
                 <Table>
                 <TableHeader>
                     <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Time In</TableHead>
-                    <TableHead>Time Out</TableHead>
+                    <TableHead>Scan Timestamp</TableHead>
+                    <TableHead>RFID Scanned</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {logs.map((record) => (
-                    <TableRow key={record.date}>
-                        <TableCell className="font-medium">{format(new Date(record.date), 'PPP')}</TableCell>
-                        <TableCell>
-                        <Badge
-                            variant={
-                            record.status === "Present"
-                                ? "default"
-                                : "destructive"
-                            }
-                            className={record.status === 'Present' ? 'bg-green-500/20 text-green-700 border-green-500/30 hover:bg-green-500/30' : 'bg-red-500/20 text-red-700 border-red-500/30 hover:bg-red-500/30'}
-                        >
-                            {record.status}
-                        </Badge>
-                        </TableCell>
-                        <TableCell>{record.timeIn || "---"}</TableCell>
-                        <TableCell>{record.timeOut || "---"}</TableCell>
+                    {logs.map((log) => (
+                    <TableRow key={log.id}>
+                        <TableCell className="font-medium">{log.timestamp ? format(log.timestamp.toDate(), 'PPP p') : 'Invalid Date'}</TableCell>
+                        <TableCell className="font-mono">{log.uid}</TableCell>
                     </TableRow>
                     ))}
                 </TableBody>
