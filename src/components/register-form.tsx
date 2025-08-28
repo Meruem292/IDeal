@@ -49,6 +49,7 @@ export function RegisterForm() {
   const [birthday, setBirthday] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [rfid, setRfid] = useState("")
 
   // Guardian fields
   const [guardianName, setGuardianName] = useState("")
@@ -201,7 +202,7 @@ export function RegisterForm() {
           relationship: guardianRelationship,
           contactNumber: guardianContact,
         },
-        rfid: null,
+        rfid: rfid || null,
         status: "active" 
       });
 
@@ -280,6 +281,11 @@ export function RegisterForm() {
                         <Label htmlFor="birthday">Birthday</Label>
                         <Input id="birthday" type="date" required disabled={isLoading} value={birthday} onChange={(e) => setBirthday(e.target.value)} />
                     </div>
+                </div>
+
+                <div className="grid gap-2">
+                    <Label htmlFor="rfid">RFID No. (Optional)</Label>
+                    <Input id="rfid" placeholder="e.g, 766EF94D" disabled={isLoading} value={rfid} onChange={(e) => setRfid(e.target.value.toUpperCase())} className="font-mono"/>
                 </div>
                 
                 <h3 className="text-lg font-semibold text-primary pt-4">Address</h3>
@@ -376,5 +382,7 @@ export function RegisterForm() {
     </div>
   )
 }
+
+    
 
     
