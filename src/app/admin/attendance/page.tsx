@@ -60,11 +60,10 @@ export default function AttendancePage() {
                 });
 
                 // 2. Fetch all attendance records from the rfid_history collection
-                // Corrected query to use 'time' field for ordering
-                const historyQuery = query(collection(db, 'rfid_history'), orderBy('time', 'desc'));
+                const historyQuery = query(collection(db, 'rfid_history'));
                 const historySnapshot = await getDocs(historyQuery);
                 
-                const attendanceList: AttendanceLog[] = [];
+                let attendanceList: AttendanceLog[] = [];
                 historySnapshot.forEach(doc => {
                     const data = doc.data();
                     // Use the UID from the scan (and normalize to uppercase) to find the student's name
@@ -77,6 +76,9 @@ export default function AttendancePage() {
                         time: data.time,
                     });
                 });
+
+                // 3. Sort the list in the browser since Firestore can't sort strings numerically
+                attendanceList.sort((a, b) => parseInt(b.time, 10) - parseInt(a.time, 10));
 
                 setLogs(attendanceList);
 
