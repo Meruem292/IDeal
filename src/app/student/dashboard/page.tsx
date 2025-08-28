@@ -47,6 +47,8 @@ export default function StudentDashboardPage() {
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
             if (user) {
+                setIsLoading(true);
+                setError(null);
                 try {
                     // 1. Get the student's RFID
                     const studentDocRef = doc(db, "students", user.uid);
@@ -65,7 +67,7 @@ export default function StudentDashboardPage() {
 
                     // 2. Query rfid_history with the student's RFID (ensuring uppercase comparison)
                     const q = query(
-                        collection(db, `rfid_history`), 
+                        collection(db, "rfid_history"), 
                         where("uid", "==", studentData.rfid.toUpperCase()),
                         orderBy("timestamp", "desc")
                     );
@@ -239,7 +241,3 @@ export default function StudentDashboardPage() {
     </DashboardLayout>
   )
 }
-
-    
-
-    
