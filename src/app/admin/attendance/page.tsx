@@ -27,7 +27,16 @@ type AttendanceLog = {
     id: string;
     studentName: string;
     rfid: string;
-    timestamp: any; // Firestore Timestamp
+    time: string; // Unix timestamp as string
+};
+
+const formatScanTime = (timeStr: string) => {
+    try {
+        const timestamp = parseInt(timeStr, 10);
+        return format(new Date(timestamp * 1000), 'Pp');
+    } catch (e) {
+        return 'Invalid Date';
+    }
 };
 
 
@@ -45,32 +54,39 @@ export default function AttendancePage() {
                 studentsSnapshot.forEach(doc => {
                     const student = doc.data() as Student;
                     if (student.rfid) {
-                        rfidToStudentMap.set(student.rfid, `${student.firstName} ${student.lastName}`);
+                        // Ensure RFID is stored consistently, e.g., uppercase
+                        rfidToStudentMap.set(student.rfid.toUpperCase(), `${student.firstName} ${student.lastName}`);
                     }
                 });
 
                 // 2. Fetch all attendance records from the rfid_history collection
-                const historyQuery = query(collection(db, 'rfid_history'), orderBy('timestamp', 'desc'));
+                // Corrected query to use 'time' field for ordering
+                const historyQuery = query(collection(db, 'rfid_history'), orderBy('time', 'desc'));
                 const historySnapshot = await getDocs(historyQuery);
                 
                 const attendanceList: AttendanceLog[] = [];
                 historySnapshot.forEach(doc => {
                     const data = doc.data();
-                    // Use the UID from the scan to find the student's name
-                    const studentName = rfidToStudentMap.get(data.uid) || 'Unknown Student';
+                    // Use the UID from the scan (and normalize to uppercase) to find the student's name
+                    const studentName = rfidToStudentMap.get(data.uid.toUpperCase()) || 'Unknown Student';
 
                     attendanceList.push({
                         id: doc.id,
                         studentName: studentName,
                         rfid: data.uid,
-                        timestamp: data.timestamp,
+                        time: data.time,
                     });
                 });
 
                 setLogs(attendanceList);
 
-            } catch (error) {
-                console.error("Error fetching attendance logs: ", error);
+            } catch (error: any) {
+                 if (error.message.includes("requires an index")) {
+                    console.error("Firestore index required. Please check the Firebase console for the link to create it.", error);
+                    // Optionally, set an error state to inform the user.
+                } else {
+                    console.error("Error fetching attendance logs: ", error);
+                }
             } finally {
                 setIsLoading(false);
             }
@@ -106,7 +122,7 @@ export default function AttendancePage() {
                                     <TableRow key={log.id}>
                                         <TableCell className="font-medium">{log.studentName}</TableCell>
                                         <TableCell>{log.rfid}</TableCell>
-                                        <TableCell>{log.timestamp ? format(log.timestamp.toDate(), 'Pp') : 'Invalid Date'}</TableCell>
+                                        <TableCell>{formatScanTime(log.time)}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>

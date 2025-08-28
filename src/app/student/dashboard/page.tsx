@@ -1,3 +1,4 @@
+
 "use client"
 import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
@@ -24,9 +25,22 @@ import type { Student } from "@/lib/mock-data"
 
 type RawScan = {
     id: string;
-    timestamp: any; // Firestore Timestamp
+    time: string; // The Unix timestamp as a string
     uid: string;
 };
+
+// Helper to convert string unix time to a readable format
+const formatScanTime = (timeStr: string) => {
+    try {
+        const timestamp = parseInt(timeStr, 10);
+        // Firestore uses seconds for Unix time, so multiply by 1000 for JS Date
+        return format(new Date(timestamp * 1000), 'PPP p');
+    } catch (e) {
+        console.error("Invalid time format:", timeStr, e);
+        return "Invalid Date";
+    }
+};
+
 
 export default function StudentDashboardPage() {
     const [logs, setLogs] = useState<RawScan[]>([]);
@@ -60,13 +74,13 @@ export default function StudentDashboardPage() {
 
                         const studentRfid = studentData.rfid.toUpperCase();
 
+                        // Corrected query: using 'time' field for ordering as seen in screenshot
                         const q = query(
                             collection(db, "rfid_history"),
                             where("uid", "==", studentRfid),
-                            orderBy("timestamp", "desc")
+                            orderBy("time", "desc")
                         );
 
-                        // Use onSnapshot for real-time updates
                         historyUnsubscribe = onSnapshot(q, (querySnapshot) => {
                             const rawScans: RawScan[] = [];
                             querySnapshot.forEach((doc) => {
@@ -74,14 +88,19 @@ export default function StudentDashboardPage() {
                                 rawScans.push({
                                     id: doc.id,
                                     uid: data.uid,
-                                    timestamp: data.timestamp,
+                                    time: data.time,
                                 });
                             });
                             setLogs(rawScans);
                             setIsLoading(false);
                         }, (err) => {
                             console.error("Error fetching attendance history: ", err);
-                            setError(err.message || "Failed to fetch your attendance history.");
+                            // This might indicate a missing index if 'time' field is also used for sorting
+                            if (err.message.includes("requires an index")) {
+                                setError("The database query requires a new index. Please check the developer console for a link to create it in Firebase.");
+                            } else {
+                                setError(err.message || "Failed to fetch your attendance history.");
+                            }
                             setIsLoading(false);
                         });
 
@@ -91,7 +110,7 @@ export default function StudentDashboardPage() {
                         setIsLoading(false);
                     }
 
-                    // This function will be returned and called when the component unmounts
+                    // Cleanup on unmount
                     return () => {
                         if (historyUnsubscribe) {
                             historyUnsubscribe();
@@ -102,14 +121,12 @@ export default function StudentDashboardPage() {
                 getHistory();
 
             } else {
-                // User is signed out
                 setIsLoading(false);
                 setError("You must be logged in to view your dashboard.");
                 setLogs([]);
             }
         });
 
-        // Cleanup the auth subscription
         return () => authUnsubscribe();
     }, []);
 
@@ -144,7 +161,7 @@ export default function StudentDashboardPage() {
                 <TableBody>
                     {logs.map((log) => (
                     <TableRow key={log.id}>
-                        <TableCell className="font-medium">{log.timestamp ? format(log.timestamp.toDate(), 'PPP p') : 'Invalid Date'}</TableCell>
+                        <TableCell className="font-medium">{formatScanTime(log.time)}</TableCell>
                         <TableCell className="font-mono">{log.uid}</TableCell>
                     </TableRow>
                     ))}
