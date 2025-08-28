@@ -28,7 +28,6 @@ type AttendanceLog = {
     studentName: string;
     rfid: string;
     timestamp: any; // Firestore Timestamp
-    type: 'time-in' | 'time-out';
 };
 
 
@@ -57,6 +56,7 @@ export default function AttendancePage() {
                 const attendanceList: AttendanceLog[] = [];
                 historySnapshot.forEach(doc => {
                     const data = doc.data();
+                    // Use the UID from the scan to find the student's name
                     const studentName = rfidToStudentMap.get(data.uid) || 'Unknown Student';
 
                     attendanceList.push({
@@ -64,7 +64,6 @@ export default function AttendancePage() {
                         studentName: studentName,
                         rfid: data.uid,
                         timestamp: data.timestamp,
-                        type: data.type,
                     });
                 });
 
@@ -100,7 +99,6 @@ export default function AttendancePage() {
                                     <TableHead>Student Name</TableHead>
                                     <TableHead>RFID</TableHead>
                                     <TableHead>Timestamp</TableHead>
-                                    <TableHead>Type</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -109,7 +107,6 @@ export default function AttendancePage() {
                                         <TableCell className="font-medium">{log.studentName}</TableCell>
                                         <TableCell>{log.rfid}</TableCell>
                                         <TableCell>{log.timestamp ? format(log.timestamp.toDate(), 'Pp') : 'Invalid Date'}</TableCell>
-                                        <TableCell className="capitalize">{log.type}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
