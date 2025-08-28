@@ -18,22 +18,24 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Check, X, Clock, Loader2 } from "lucide-react"
+import { Check, X, Clock, Loader2, AlertCircle } from "lucide-react"
 import { auth, db } from "@/lib/firebase"
-import { collection, query, orderBy, getDocs } from "firebase/firestore"
+import { collection, query, where, orderBy, getDocs, doc, getDoc } from "firebase/firestore"
 import { format } from "date-fns"
+import type { Student } from "@/lib/mock-data"
 
-type AttendanceLog = {
+
+type RawScan = {
     id: string;
     timestamp: any; // Firestore Timestamp
-    type: 'time-in' | 'time-out';
+    uid: string;
 };
 
 type ProcessedAttendanceRecord = {
     date: string;
     timeIn: string | null;
     timeOut: string | null;
-    status: "Present" | "Absent"; // Simplified for this view
+    status: "Present" | "Absent"; 
 }
 
 
@@ -46,46 +48,69 @@ export default function StudentDashboardPage() {
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
             if (user) {
                 try {
-                    const q = query(collection(db, `students/${user.uid}/attendance`), orderBy("timestamp", "desc"));
+                    // 1. Get the student's RFID
+                    const studentDocRef = doc(db, "students", user.uid);
+                    const studentDoc = await getDoc(studentDocRef);
+
+                    if (!studentDoc.exists()) {
+                        throw new Error("Student profile not found.");
+                    }
+                    const studentData = studentDoc.data() as Student;
+                    
+                    if (!studentData.rfid) {
+                        setError("You have not registered an RFID card. Please register one on your profile page.");
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    // 2. Query rfid_history with the student's RFID
+                    const q = query(
+                        collection(db, `rfid_history`), 
+                        where("uid", "==", studentData.rfid),
+                        orderBy("timestamp", "desc")
+                    );
                     const querySnapshot = await getDocs(q);
                     
-                    const attendanceByDate: {[key: string]: {timeIn?: any, timeOut?: any}} = {};
+                    const attendanceByDate: {[key: string]: {scans: any[]}} = {};
 
+                    // Group scans by date
                     querySnapshot.forEach(doc => {
-                        const data = doc.data() as AttendanceLog;
+                        const data = doc.data();
                         const dateStr = format(data.timestamp.toDate(), 'yyyy-MM-dd');
                         
                         if (!attendanceByDate[dateStr]) {
-                            attendanceByDate[dateStr] = {};
+                            attendanceByDate[dateStr] = { scans: [] };
                         }
-
-                        if (data.type === 'time-in') {
-                           // If multiple time-ins for a day, take the earliest one
-                           if (!attendanceByDate[dateStr].timeIn || data.timestamp.toMillis() < attendanceByDate[dateStr].timeIn.toMillis()) {
-                                attendanceByDate[dateStr].timeIn = data.timestamp;
-                           }
-                        } else if (data.type === 'time-out') {
-                            // If multiple time-outs for a day, take the latest one
-                            if (!attendanceByDate[dateStr].timeOut || data.timestamp.toMillis() > attendanceByDate[dateStr].timeOut.toMillis()) {
-                                attendanceByDate[dateStr].timeOut = data.timestamp;
-                            }
-                        }
+                        attendanceByDate[dateStr].scans.push(data.timestamp);
                     });
 
+                    // 3. Process the grouped scans
                     const processedRecords: ProcessedAttendanceRecord[] = Object.entries(attendanceByDate)
-                        .map(([date, times]) => ({
-                            date: date,
-                            timeIn: times.timeIn ? format(times.timeIn.toDate(), 'p') : null,
-                            timeOut: times.timeOut ? format(times.timeOut.toDate(), 'p') : null,
-                            status: times.timeIn ? "Present" : "Absent", // simplified logic
-                        }))
-                        .sort((a,b) => b.date.localeCompare(a.date)); // Sort descending by date string
-                    
+                        .map(([date, {scans}]) => {
+                             if (scans.length === 0) {
+                                return null;
+                            }
+                            // Sort scans to find the earliest (timeIn) and latest (timeOut)
+                            scans.sort((a, b) => a.toMillis() - b.toMillis());
+                            
+                            const timeIn = scans[0];
+                            const timeOut = scans.length > 1 ? scans[scans.length - 1] : null;
+
+                            return {
+                                date: date,
+                                timeIn: timeIn ? format(timeIn.toDate(), 'p') : null,
+                                timeOut: timeOut ? format(timeOut.toDate(), 'p') : null,
+                                status: timeIn ? "Present" : "Absent",
+                            };
+                        })
+                        .filter((record): record is ProcessedAttendanceRecord => record !== null)
+                        .sort((a,b) => b.date.localeCompare(a.date)); // Sort by date descending
+
                     setLogs(processedRecords);
 
-                } catch (err) {
+                } catch (err: any) {
                     console.error("Error fetching attendance history: ", err);
-                    setError("Failed to fetch your attendance history.");
+                    setError(err.message || "Failed to fetch your attendance history.");
                 } finally {
                     setIsLoading(false);
                 }
@@ -99,7 +124,8 @@ export default function StudentDashboardPage() {
 
     }, []);
 
-  const todayRecord = logs[0] || null;
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const todayRecord = logs.find(log => log.date === todayStr) || null;
 
   if (isLoading) {
     return (
@@ -114,8 +140,9 @@ export default function StudentDashboardPage() {
   if (error) {
      return (
         <DashboardLayout role="student">
-             <div className="flex flex-col items-center justify-center h-full rounded-lg border-2 border-dashed p-8">
-                <h2 className="text-xl font-semibold">Error</h2>
+             <div className="flex flex-col items-center justify-center h-full rounded-lg border-2 border-dashed border-destructive/50 bg-destructive/10 text-destructive p-8 text-center">
+                <AlertCircle className="h-10 w-10 mb-4" />
+                <h2 className="text-xl font-semibold mb-2">Could Not Load Attendance</h2>
                 <p>{error}</p>
             </div>
         </DashboardLayout>
@@ -165,7 +192,7 @@ export default function StudentDashboardPage() {
           <CardHeader>
             <CardTitle>My Attendance History</CardTitle>
             <CardDescription>
-              A log of your recent attendance records.
+              A log of your recent attendance records from RFID scans.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -203,7 +230,7 @@ export default function StudentDashboardPage() {
                 </Table>
             ) : (
                 <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
-                    <p>No attendance records found.</p>
+                    <p>No attendance records found for your RFID.</p>
                 </div>
             )}
           </CardContent>
@@ -212,3 +239,5 @@ export default function StudentDashboardPage() {
     </DashboardLayout>
   )
 }
+
+    
