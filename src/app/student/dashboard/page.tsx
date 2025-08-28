@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table"
 import { Loader2, AlertCircle } from "lucide-react"
 import { auth, db } from "@/lib/firebase"
-import { collection, query, where, onSnapshot } from "firebase/firestore"
+import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore"
 import { format } from "date-fns"
 import type { Student } from "@/lib/mock-data"
 
