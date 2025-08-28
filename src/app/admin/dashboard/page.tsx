@@ -1,3 +1,4 @@
+
 import { DashboardLayout } from "@/components/dashboard-layout"
 import {
   Card,
@@ -9,7 +10,7 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Users, BookUser, UserPlus, ClipboardList } from "lucide-react"
+import { Users, BookUser, UserPlus, ClipboardList, ScanLine, History } from "lucide-react"
 
 export default function AdminDashboardPage() {
   return (
@@ -92,6 +93,42 @@ export default function AdminDashboardPage() {
                  <CardFooter>
                     <Button asChild>
                         <Link href="/admin/manage-sections">Manage Sections</Link>
+                    </Button>
+                 </CardFooter>
+            </Card>
+             <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                    Scanner
+                    </CardTitle>
+                    <ScanLine className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <p className="text-xs text-muted-foreground">
+                        Simulate an RFID scan to record attendance.
+                    </p>
+                </CardContent>
+                 <CardFooter>
+                    <Button asChild>
+                        <Link href="/admin/scanner">Go to Scanner</Link>
+                    </Button>
+                 </CardFooter>
+            </Card>
+             <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                    Attendance Logs
+                    </CardTitle>
+                    <History className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <p className="text-xs text-muted-foreground">
+                        View all historical attendance records.
+                    </p>
+                </CardContent>
+                 <CardFooter>
+                    <Button asChild>
+                        <Link href="/admin/attendance">View Logs</Link>
                     </Button>
                  </CardFooter>
             </Card>
