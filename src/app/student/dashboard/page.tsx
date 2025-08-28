@@ -63,10 +63,10 @@ export default function StudentDashboardPage() {
                         return;
                     }
 
-                    // 2. Query rfid_history with the student's RFID
+                    // 2. Query rfid_history with the student's RFID (ensuring uppercase comparison)
                     const q = query(
                         collection(db, `rfid_history`), 
-                        where("uid", "==", studentData.rfid),
+                        where("uid", "==", studentData.rfid.toUpperCase()),
                         orderBy("timestamp", "desc")
                     );
                     const querySnapshot = await getDocs(q);
@@ -239,5 +239,7 @@ export default function StudentDashboardPage() {
     </DashboardLayout>
   )
 }
+
+    
 
     
