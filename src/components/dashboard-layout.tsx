@@ -41,7 +41,6 @@ import { signOut } from "firebase/auth"
 import { useToast } from "@/hooks/use-toast"
 import { useState, useEffect } from "react"
 import type { User as FirebaseAuthUser } from "firebase/auth"
-import { SheetTitle, SheetDescription } from "@/components/ui/sheet"
 
 type UserRole = "student" | "faculty" | "admin"
 
@@ -158,8 +157,6 @@ export function DashboardLayout({
           </div>
         </SidebarHeader>
         <SidebarContent>
-          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-          <SheetDescription className="sr-only">Contains the main navigation links for the application.</SheetDescription>
           <SidebarMenu>
             {navItems[role].map((item) => (
               <SidebarMenuItem key={item.href}>
