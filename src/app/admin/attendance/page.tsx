@@ -27,13 +27,15 @@ type AttendanceLog = {
     id: string;
     studentName: string;
     rfid: string;
-    time: string; // Unix timestamp as string
+    time: number; // Unix timestamp as number
 };
 
-const formatScanTime = (timeStr: string) => {
+const formatScanTime = (time: number) => {
     try {
-        const timestamp = parseInt(timeStr, 10);
-        return format(new Date(timestamp * 1000), 'Pp');
+        // We assume the timestamp from Firestore is a valid number (seconds or milliseconds)
+        // Let's check if it's in seconds and convert to milliseconds if needed.
+        const date = new Date(time < 1000000000000 ? time * 1000 : time);
+        return format(date, 'Pp');
     } catch (e) {
         return 'Invalid Date';
     }
@@ -73,12 +75,12 @@ export default function AttendancePage() {
                         id: doc.id,
                         studentName: studentName,
                         rfid: data.uid,
-                        time: data.time,
+                        time: Number(data.time), // Ensure time is a number
                     });
                 });
 
-                // 3. Sort the list in the browser since Firestore can't sort strings numerically
-                attendanceList.sort((a, b) => parseInt(b.time, 10) - parseInt(a.time, 10));
+                // 3. Sort the list chronologically
+                attendanceList.sort((a, b) => b.time - a.time);
 
                 setLogs(attendanceList);
 
