@@ -27,14 +27,16 @@ type AttendanceLog = {
     id: string;
     studentName: string;
     rfid: string;
-    time: number; // Unix timestamp as number
+    time: string; // Keep as string from Firestore
 };
 
-const formatScanTime = (time: number) => {
+const formatScanTime = (time: string) => {
     try {
-        // We assume the timestamp from Firestore is a valid number (seconds or milliseconds)
-        // Let's check if it's in seconds and convert to milliseconds if needed.
-        const date = new Date(time < 1000000000000 ? time * 1000 : time);
+        // The timestamp from Firestore is a string like "YYYY-MM-DD HH:MM:SS"
+        const date = new Date(time);
+        if (isNaN(date.getTime())) {
+            return 'Invalid Date';
+        }
         return format(date, 'Pp');
     } catch (e) {
         return 'Invalid Date';
@@ -75,12 +77,12 @@ export default function AttendancePage() {
                         id: doc.id,
                         studentName: studentName,
                         rfid: data.uid,
-                        time: Number(data.time), // Ensure time is a number
+                        time: data.time, // Keep as string
                     });
                 });
 
-                // 3. Sort the list chronologically
-                attendanceList.sort((a, b) => b.time - a.time);
+                // 3. Sort the list chronologically by converting string date to Date object
+                attendanceList.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
                 setLogs(attendanceList);
 

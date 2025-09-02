@@ -25,16 +25,18 @@ import type { Student } from "@/lib/mock-data"
 
 type RawScan = {
     id: string;
-    time: number; // The Unix timestamp as a number
+    time: string; // The date string from Firestore
     uid: string;
 };
 
-// Helper to convert string unix time to a readable format
-const formatScanTime = (time: number) => {
+// Helper to convert string date to a readable format
+const formatScanTime = (time: string) => {
     try {
-        // We assume the timestamp from Firestore is a valid number (seconds or milliseconds)
-        // Let's check if it's in seconds and convert to milliseconds if needed.
-        const date = new Date(time < 1000000000000 ? time * 1000 : time);
+        // The timestamp from Firestore is a string like "YYYY-MM-DD HH:MM:SS"
+        const date = new Date(time);
+        if (isNaN(date.getTime())) {
+            return "Invalid Date";
+        }
         return format(date, 'Pp');
     } catch (e) {
         console.error("Invalid time format:", time, e);
@@ -90,11 +92,12 @@ export default function StudentDashboardPage() {
                                 rawScans.push({
                                     id: doc.id,
                                     uid: data.uid,
-                                    time: Number(data.time), // Ensure time is a number
+                                    time: data.time, // Keep as string
                                 });
                             });
-                            // Sort the list chronologically
-                            rawScans.sort((a, b) => b.time - a.time);
+                           
+                            // Sort the list chronologically by converting string date to Date object
+                            rawScans.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
                             setLogs(rawScans);
                             setIsLoading(false);
