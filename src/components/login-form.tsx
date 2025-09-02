@@ -1,11 +1,13 @@
+
 "use client"
 
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { CheckCircle, Loader2 } from "lucide-react"
-import { signInWithEmailAndPassword } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { signInWithEmailAndPassword, signOut } from "firebase/auth"
+import { doc, getDoc } from "firebase/firestore"
+import { auth, db } from "@/lib/firebase"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -50,17 +52,49 @@ export function LoginForm() {
     }
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast({
-        title: "Login Successful",
-        description: "Redirecting to your dashboard...",
-      })
-      router.push(`/${role}/dashboard`)
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Security check: Verify the user's role from Firestore
+      let actualRole = "";
+      const adminDoc = await getDoc(doc(db, "admins", user.uid));
+      if (adminDoc.exists()) {
+        actualRole = "admin";
+      } else {
+        const facultyDoc = await getDoc(doc(db, "faculty", user.uid));
+        if (facultyDoc.exists()) {
+          actualRole = "faculty";
+        } else {
+          const studentDoc = await getDoc(doc(db, "students", user.uid));
+          if (studentDoc.exists()) {
+            actualRole = "student";
+          }
+        }
+      }
+
+      if (actualRole === role) {
+        toast({
+          title: "Login Successful",
+          description: "Redirecting to your dashboard...",
+        })
+        router.push(`/${role}/dashboard`)
+      } else {
+        // Log the user out immediately if roles don't match
+        await signOut(auth);
+        toast({
+          variant: "destructive",
+          title: "Access Denied",
+          description: `You are not registered as a(n) ${role}.`,
+        })
+      }
+
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Login Failed",
-        description: error.message,
+        description: error.code === 'auth/invalid-credential' 
+          ? 'Invalid email or password.'
+          : error.message,
       })
     } finally {
       setIsLoading(false)
