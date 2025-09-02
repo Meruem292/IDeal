@@ -24,6 +24,7 @@ import {
   ClipboardList,
   History,
   Fingerprint,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
@@ -41,6 +42,7 @@ import { signOut } from "firebase/auth"
 import { useToast } from "@/hooks/use-toast"
 import { useState, useEffect } from "react"
 import type { User as FirebaseAuthUser } from "firebase/auth"
+import { useAuthRole } from "@/hooks/use-auth-role"
 
 type UserRole = "student" | "faculty" | "admin"
 
@@ -146,6 +148,29 @@ export function DashboardLayout({
   role: UserRole
 }) {
   const pathname = usePathname()
+  const { isChecking, isAuthorized } = useAuthRole(role)
+
+  if (isChecking) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!isAuthorized) {
+    return (
+       <div className="flex h-screen w-full items-center justify-center">
+        <div className="text-center">
+            <h1 className="text-2xl font-bold">Access Denied</h1>
+            <p className="text-muted-foreground">You do not have permission to view this page.</p>
+             <Button onClick={() => window.location.href = '/login'} className="mt-4">
+                Go to Login
+            </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>

@@ -71,6 +71,17 @@ export function LoginForm() {
           }
         }
       }
+      
+      if (!actualRole) {
+        await signOut(auth);
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: "Your account does not have a valid role assigned. Please contact an administrator.",
+        })
+        setIsLoading(false)
+        return;
+      }
 
       if (actualRole === role) {
         toast({
