@@ -3,66 +3,86 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions to check user roles
-    function isStudent() {
-      return exists(/databases/$(database)/documents/students/$(request.auth.uid));
+    // --- Helper Functions ---
+    function isAuth() {
+      return request.auth != null;
     }
-    
-    function isFaculty() {
-      return exists(/databases/$(database)/documents/faculty/$(request.auth.uid));
+
+    function isSelf(userId) {
+      return isAuth() && request.auth.uid == userId;
     }
 
     function isAdmin() {
-      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-
-    // Any authenticated user can check if their own UID exists in these collections.
-    // This is required for the login logic to verify a user's role.
-    match /admins/{userId} {
-      allow get: if request.auth.uid == userId;
-      // Admins can read/write the entire collection
-      allow read, write: if isAdmin();
+      // User is an admin if their UID exists in the 'admins' collection.
+      return isAuth() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     
-    match /faculty/{userId} {
-      allow get: if request.auth.uid == userId;
-      // Admins can manage faculty
-      allow list, write: if isAdmin();
+    function isFaculty() {
+      // User is faculty if their UID exists in the 'faculty' collection.
+      return isAuth() && exists(/databases/$(database)/documents/faculty/$(request.auth.uid));
+    }
+
+    function isStudent() {
+       // User is a student if their UID exists in the 'students' collection.
+      return isAuth() && exists(/databases/$(database)/documents/students/$(request.auth.uid));
+    }
+
+    // --- Collection Rules ---
+
+    match /admins/{userId} {
+      // Admins can read, update, and delete other admin documents.
+      // A user can create their own document (for initial setup).
+      allow read, update, delete: if isAdmin();
+      allow create: if isSelf(userId) || isAdmin();
     }
 
     match /students/{studentId} {
-      // Allow unauthenticated users to create a student document (register)
-      allow create: if request.auth.uid == studentId;
-      
-      // An authenticated user can get their own document
-      allow get: if request.auth.uid == studentId;
-      // An authenticated user can update their own document
-      allow update(diff) : if request.auth.uid == studentId && diff.size() == 1 && diff.affectedKeys().hasOnly(['rfid']);
-      allow update : if request.auth.uid == studentId && diff.size() > 1;
+      // Allow user to create their own student document during registration.
+      allow create: if isSelf(studentId);
+      // Admins and faculty can view any student profile. A student can view their own.
+      allow get: if isAdmin() || isFaculty() || isSelf(studentId);
+      // Admins and faculty can list all students.
+      allow list: if isAdmin() || isFaculty();
+      // A student can update their own profile (e.g., to add an RFID). Admins can update any.
+      allow update: if isSelf(studentId) || isAdmin();
+      // Only admins can delete student records.
+      allow delete: if isAdmin();
 
-
-      // Admins and faculty can view all student data
-      allow list, get: if isAdmin() || isFaculty();
-      // Admins can manage all student data
-      allow write: if isAdmin();
+      // Rules for the (currently unused) attendance sub-collection for completeness.
+      match /attendance/{attendanceId} {
+        allow read, write: if isAdmin() || isSelf(studentId);
+      }
     }
 
+    match /faculty/{facultyId} {
+      // Admins can manage faculty records fully.
+      allow read, write: if isAdmin();
+      // Faculty members can view their own record.
+      allow get: if isSelf(facultyId);
+    }
+    
     match /sections/{sectionId} {
+      // Admins have full control over sections.
+      // Faculty can read section information.
       allow read: if isAdmin() || isFaculty();
       allow write: if isAdmin();
-
+      
       match /schedules/{scheduleId} {
+        // Permissions for schedules subcollection mirror the parent section.
         allow read: if isAdmin() || isFaculty();
         allow write: if isAdmin();
       }
     }
 
     match /rfid_history/{scanId} {
-        allow read: if isAdmin();
-        allow list: if isAdmin();
-
-        // A student can only see their own scan history.
-        allow list: if isStudent() && request.query.where.get('uid') == resource.data.uid;
+      // Allow READ access only for admins (all scans) or a student (their own scans).
+      allow read: if isAdmin() || (isStudent() && resource.data.uid == get(/databases/$(database)/documents/students/$(request.auth.uid)).data.rfid);
+      
+      // IMPORTANT: Restrict WRITE access. 
+      // This is a placeholder for a more secure method like a Cloud Function with a secret key.
+      // For now, only authenticated users can write, which is better than public write.
+      // Your ESP32 would need to authenticate to use this rule.
+      allow write: if isAuth(); 
     }
   }
 }
