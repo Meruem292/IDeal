@@ -3,77 +3,67 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions to check user roles from their respective collections
-    function isAdmin() {
-      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-
-    function isFaculty() {
-      return exists(/databases/$(database)/documents/faculty/$(request.auth.uid));
+    // Helper functions to check user roles
+    function isAdmin(userId) {
+      return exists(/databases/$(database)/documents/admins/$(userId));
     }
     
-    function isStudent(studentId) {
-      return request.auth.uid == studentId;
+    function isFaculty(userId) {
+      return exists(/databases/$(database)/documents/faculty/$(userId));
     }
     
-    function isSignedIn() {
-      return request.auth != null;
+    function isStudent(userId) {
+      return exists(/databases/$(database)/documents/students/$(userId));
     }
 
-    // Rules for the 'students' collection
-    match /students/{studentId} {
-      // Allow user to create their own student document during registration
-      allow create: if isStudent(studentId);
-      
-      // Allow a student to read and update their own document
-      // Allow faculty and admins to read any student document
-      allow read: if isStudent(studentId) || isFaculty() || isAdmin();
-      allow update: if isStudent(studentId) || isAdmin();
-      
-      // Only admins can delete student documents
-      allow delete: if isAdmin();
-    }
-    
-    // Rules for the 'faculty' collection
-    match /faculty/{facultyId} {
-      // Any authenticated user can read faculty info (e.g., for section assignment)
-      // Admins can create, update, and delete faculty members
-      allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Rules for the 'admins' collection
+    // Admins Collection: Only readable by other admins.
     match /admins/{adminId} {
-      // Only other admins can manage admin documents
-      allow read, write: if isAdmin();
+      allow read, write: if isAdmin(request.auth.uid);
     }
 
-    // Rules for the 'sections' collection and its subcollections
-    match /sections/{sectionId} {
-      // Admins and faculty can read section information
-      allow read: if isAdmin() || isFaculty();
-      // Only admins can create, update, or delete sections
-      allow write: if isAdmin();
-
-      // Rules for the 'schedules' subcollection
-      match /schedules/{scheduleId} {
-        // Admins and faculty can read schedules
-        allow read: if isAdmin() || isFaculty();
-        // Only admins can write to schedules
-        allow write: if isAdmin();
-      }
+    // Faculty Collection:
+    // Admins can manage faculty.
+    // Authenticated users can list/read faculty (for dropdowns).
+    // Faculty can read their own profile.
+    match /faculty/{facultyId} {
+      allow get, list: if request.auth != null;
+      allow create, update, delete: if isAdmin(request.auth.uid);
     }
 
-    // Rules for the 'rfid_history' collection
+    // Students Collection:
+    // Anyone can create a student (register).
+    // Admins/Faculty can view all students.
+    // Students can view/update their own profile.
+    match /students/{studentId} {
+      allow create: if request.auth.uid == studentId; // For registration
+      allow get: if request.auth.uid == studentId || isFaculty(request.auth.uid) || isAdmin(request.auth.uid);
+      allow list: if isFaculty(request.auth.uid) || isAdmin(request.auth.uid);
+      allow update: if request.auth.uid == studentId || isAdmin(request.auth.uid);
+      allow delete: if isAdmin(request.auth.uid);
+    }
+    
+    // RFID History Collection:
+    // Admins can read the entire history.
+    // Students can only read their own history.
+    // Only the device can write to it (no client writes).
     match /rfid_history/{scanId} {
-      // An admin can read the entire history
-      allow read: if isAdmin();
-      // A student can read a scan record if the 'uid' in the document matches their own 'rfid'
-      allow read: if exists(/databases/$(database)/documents/students/$(request.auth.uid))
-                    && get(/databases/$(database)/documents/students/$(request.auth.uid)).data.rfid == resource.data.uid;
-      
-      // Disallow any client-side writes to the history
-      allow write: if false; 
+      allow read: if isAdmin(request.auth.uid) || 
+                   (isStudent(request.auth.uid) && get(/databases/$(database)/documents/students/$(request.auth.uid)).data.rfid == resource.data.uid);
+      allow list: if isAdmin(request.auth.uid) || isStudent(request.auth.uid); // List is further filtered by UID in app query
+      allow write: if false; // No client-side writes
+    }
+    
+    // Sections and Schedules:
+    // Admins can manage sections and schedules.
+    // Faculty can read sections and schedules.
+    match /sections/{sectionId} {
+      allow get, list: if isAdmin(request.auth.uid) || isFaculty(request.auth.uid);
+      allow create, update, delete: if isAdmin(request.auth.uid);
+
+      match /schedules/{scheduleId} {
+        allow get, list: if isAdmin(request.auth.uid) || isFaculty(request.auth.uid);
+        allow create, update, delete: if isAdmin(request.auth.uid);
+      }
     }
   }
 }
