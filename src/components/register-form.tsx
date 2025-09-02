@@ -203,7 +203,8 @@ export function RegisterForm() {
           contactNumber: guardianContact,
         },
         rfid: rfid || null,
-        status: "active" 
+        status: "active",
+        role: "student",
       });
 
       toast({
@@ -382,6 +383,8 @@ export function RegisterForm() {
     </div>
   )
 }
+
+    
 
     
 
