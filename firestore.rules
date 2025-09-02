@@ -2,68 +2,67 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // --- Helper Functions ---
-    function isAuth() {
+  
+    // Helper functions to check user roles
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isAuth() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-    
-    function isSelf(userId) {
-      return isAuth() && request.auth.uid == userId;
+    function isStudent(userId) {
+      return exists(/databases/$(database)/documents/students/$(userId));
     }
 
-    // --- Collection Rules ---
-
-    match /admins/{userId} {
-      allow read, delete: if isAdmin();
-      // Only an authenticated user can create their own admin doc, or existing admin can create another admin
-      allow create: if isSelf(userId) || isAdmin();
+    function isFaculty(userId) {
+      return exists(/databases/$(database)/documents/faculty/$(userId));
     }
 
+    function isAdmin(userId) {
+      return exists(/databases/$(database)/documents/admins/$(userId));
+    }
+
+    // Students can be created by anyone (registration), 
+    // but only the student themselves or an admin can read/update.
+    // Only admins can delete student records.
     match /students/{studentId} {
-      // Any authenticated user (e.g., during registration) can create a student record.
-      allow create: if isAuth(); 
-      // An admin or the student themselves can read the profile.
-      allow read: if isAdmin() || isSelf(studentId);
-      // Only an admin or the student themselves can update their profile (e.g. for RFID).
-      allow update: if isAdmin() || isSelf(studentId);
-      // Only an admin can delete a student.
-      allow delete: if isAdmin();
-
-      // Rules for the attendance sub-collection
-      match /attendance/{attendanceId} {
-        // An admin can create records (simulating the scanner)
-        allow create: if isAdmin();
-        // The student themselves or an admin can read the attendance records.
-        allow read: if isSelf(studentId) || isAdmin();
-        // Only admins can modify or delete specific attendance logs.
-        allow update, delete: if isAdmin();
-      }
+      allow create: if (request.auth.uid == studentId);
+      allow read, update: if (isSignedIn() && (request.auth.uid == studentId || isAdmin(request.auth.uid)));
+      allow delete: if (isSignedIn() && isAdmin(request.auth.uid));
     }
 
+    // Admins can create/delete faculty.
+    // Faculty can read their own data.
+    // Admins can read/update all faculty data.
     match /faculty/{facultyId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if (isSignedIn() && isAdmin(request.auth.uid));
+      allow read: if (isSignedIn() && (request.auth.uid == facultyId || isAdmin(request.auth.uid)));
+      allow update: if (isSignedIn() && isAdmin(request.auth.uid));
+    }
+
+    // Only admins can read/write to the admins collection
+    match /admins/{adminId} {
+      allow read, write: if (isSignedIn() && isAdmin(request.auth.uid));
+    }
+
+    // Admins can read/write sections and their subcollections (schedules).
+    // Faculty can read section and schedule information.
+    match /sections/{sectionId} {
+      allow read: if (isSignedIn() && (isAdmin(request.auth.uid) || isFaculty(request.auth.uid)));
+      allow write: if (isSignedIn() && isAdmin(request.auth.uid));
+
+      match /schedules/{scheduleId} {
+        allow read: if (isSignedIn() && (isAdmin(request.auth.uid) || isFaculty(request.auth.uid)));
+        allow write: if (isSignedIn() && isAdmin(request.auth.uid));
+      }
     }
     
-    match /sections/{sectionId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAdmin();
-      
-      match /schedules/{scheduleId} {
-        allow read: if isAuth();
-        allow create, update, delete: if isAdmin();
-      }
-    }
-
-    // --- RFID History Collection ---
-    // Allow ESP32 (unauthenticated) to log scans
-    match /rfid_history/{document=**} {
-      allow read, write: if true;
+    // Students can read their own scan history based on their RFID.
+    // Admins can read all scan history.
+    // This collection is write-only from the external RFID scanner, so we don't allow writes from the app.
+    match /rfid_history/{docId} {
+       allow read: if (isSignedIn() && 
+                    (isAdmin(request.auth.uid) || 
+                     (isStudent(request.auth.uid) && resource.data.uid == get(/databases/$(database)/documents/students/$(request.auth.uid)).data.rfid)));
+      allow write: if false; // Data is written by a backend/physical scanner, not users.
     }
   }
 }
