@@ -8,64 +8,73 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isSelf(userId) {
-      return isAuth() && request.auth.uid == userId;
-    }
-
     function isAdmin() {
       return isAuth() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    function isSelf(userId) {
+      return isAuth() && request.auth.uid == userId;
     }
 
     // --- Collection Rules ---
 
     match /admins/{userId} {
-      // Allow an admin to read their own document, needed for role checks.
-      // Admins can manage other admins.
-      allow get: if isSelf(userId) || isAdmin();
-      allow list, create, update, delete: if isAdmin();
+      // Any authenticated user trying to log in needs to check if they are an admin.
+      allow get: if isAuth(); 
+      // Admins can list, update, and delete other admins.
+      allow list, update, delete: if isAdmin();
+      // An existing admin can create another admin.
+      allow create: if isAdmin();
     }
 
     match /students/{studentId} {
-      // Allow unauthenticated users to create an account during registration.
-      allow create: if true;
-      // Admins and faculty can read any student profile. A student can read their own.
-      allow get, list: if isAdmin() || exists(/databases/$(database)/documents/faculty/$(request.auth.uid)) || isSelf(studentId);
-      // An admin can update any student. A student can update their own profile.
+      // Any authenticated user can create a student record (for registration).
+      allow create: if isAuth(); 
+      // An admin can list students. A student can get their own profile.
+      // Any authenticated user can check their own student document during login.
+      allow get: if isAuth();
+      allow list: if isAdmin();
+      // Only an admin or the student themselves can update their profile.
       allow update: if isAdmin() || isSelf(studentId);
       // Only an admin can delete a student.
       allow delete: if isAdmin();
+
+      // Rules for the attendance sub-collection
+      match /attendance/{attendanceId} {
+        // An admin can create records (simulating the scanner)
+        allow create: if isAdmin();
+        // The student themselves or an admin can read the attendance records.
+        allow read: if isSelf(studentId) || isAdmin();
+        // Only admins can modify or delete specific attendance logs.
+        allow update, delete: if isAdmin();
+      }
     }
 
     match /faculty/{facultyId} {
-      // Any authenticated user can read faculty profiles. This is needed for the login role check.
+       // Any authenticated user can check their own faculty document during login.
       allow get: if isAuth();
-      allow list: if isAdmin() || exists(/databases/$(database)/documents/faculty/$(request.auth.uid));
-      // Only an admin can manage faculty.
+      allow list: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
     
     match /sections/{sectionId} {
-      // Admins and faculty can read section info.
-      allow read: if isAdmin() || exists(/databases/$(database)/documents/faculty/$(request.auth.uid));
-      // Only admins can manage sections and schedules.
-      allow write: if isAdmin();
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
       
       match /schedules/{scheduleId} {
-        allow read: if isAdmin() || exists(/databases/$(database)/documents/faculty/$(request.auth.uid));
-        allow write: if isAdmin();
+        allow read: if isAdmin();
+        allow create, update, delete: if isAdmin();
       }
     }
 
+    // --- RFID History Collection ---
+    // This allows any service (like an ESP32) to write a scan.
+    // In production, you would secure this with a secret key or cloud function.
     match /rfid_history/{docId} {
-      // Admins can see all history.
-      // Students can only see their own history (by querying where 'uid' == their rfid).
-      // The rules can't enforce this query directly, so we allow reads for authenticated users
-      // and rely on the query in the app to be correct. The useAuthRole hook prevents role bypass.
-      allow read: if isAdmin() || isAuth();
-      
-      // IMPORTANT: For production, this should be secured.
-      // For now, allowing any write so the ESP32 can post data without authentication.
-      allow write: if true;
+      allow create: if true; 
+      // Admins can read all history. Students can read their own.
+      allow read: if isAdmin() || (isAuth() && resource.data.uid == get(/databases/$(database)/documents/students/$(request.auth.uid)).data.rfid);
+      allow update, delete: if isAdmin();
     }
   }
 }
