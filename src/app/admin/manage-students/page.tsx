@@ -243,7 +243,6 @@ export default function ManageStudentsPage() {
                     <SelectValue placeholder="Assign a section" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
                     {sections.map(section => (
                       <SelectItem key={section.id} value={section.id}>
                         {section.name}
