@@ -20,9 +20,9 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Trash2, Edit, PlusCircle, Calendar as CalendarIcon, X, Upload, Scan } from "lucide-react"
+import { Loader2, Trash2, Edit, PlusCircle, Calendar as CalendarIcon, X, Upload, Scan, BookUser } from "lucide-react"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, doc, deleteDoc, updateDoc, addDoc, writeBatch } from "firebase/firestore"
+import { collection, getDocs, doc, deleteDoc, updateDoc, addDoc, writeBatch, query, where } from "firebase/firestore"
 import {
   Dialog,
   DialogContent,
@@ -46,6 +46,7 @@ import Image from "next/image"
 import { parseSchedule } from "@/ai/flows/schedule-parser-flow"
 import { z } from "zod"
 import { ScheduleEntrySchema } from "@/ai/schemas/schedule-parser-types"
+import type { Student } from "@/lib/mock-data"
 
 type Section = {
   id: string
@@ -75,6 +76,8 @@ type EditableScheduleEntry = z.infer<typeof ScheduleEntrySchema> & {
 export default function ManageSectionsPage() {
   const [sections, setSections] = useState<Section[]>([])
   const [faculty, setFaculty] = useState<Faculty[]>([])
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
+  const [studentsInSection, setStudentsInSection] = useState<Student[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -96,7 +99,7 @@ export default function ManageSectionsPage() {
 
   const { toast } = useToast()
 
-  const fetchSectionsAndFaculty = async () => {
+  const fetchInitialData = async () => {
     setIsLoading(true)
     try {
       const sectionsSnapshot = await getDocs(collection(db, "sections"))
@@ -107,6 +110,10 @@ export default function ManageSectionsPage() {
       const facultyList = facultySnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name } as Faculty))
       setFaculty(facultyList)
 
+      const studentsSnapshot = await getDocs(collection(db, "students"));
+      const studentList = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+      setAllStudents(studentList);
+
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error fetching data", description: error.message })
     } finally {
@@ -115,7 +122,6 @@ export default function ManageSectionsPage() {
   }
 
   const fetchSchedules = async (sectionId: string) => {
-    setIsLoading(true);
     try {
         const schedulesSnapshot = await getDocs(collection(db, `sections/${sectionId}/schedules`));
         let schedulesList = schedulesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule));
@@ -128,22 +134,26 @@ export default function ManageSectionsPage() {
         setSchedules(schedulesList.sort((a,b) => a.startTime.localeCompare(b.startTime)));
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error fetching schedules", description: error.message });
-    } finally {
-        setIsLoading(false);
+        setSchedules([]);
     }
   }
-
+  
   useEffect(() => {
-    fetchSectionsAndFaculty()
+    fetchInitialData()
   }, [])
   
   useEffect(() => {
     if (selectedSection) {
+        setIsLoading(true);
         fetchSchedules(selectedSection.id);
+        const filteredStudents = allStudents.filter(student => student.sectionId === selectedSection.id);
+        setStudentsInSection(filteredStudents.sort((a,b) => a.lastName.localeCompare(b.lastName)));
+        setIsLoading(false);
     } else {
         setSchedules([]);
+        setStudentsInSection([]);
     }
-  }, [selectedSection, faculty]);
+  }, [selectedSection, allStudents, faculty]);
 
   const handleSectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -175,7 +185,7 @@ export default function ManageSectionsPage() {
         await updateDoc(sectionRef, sectionData);
         toast({ title: "Section Updated", description: "Section details have been updated." })
       }
-      fetchSectionsAndFaculty()
+      fetchInitialData()
     } catch (error: any) {
        toast({ variant: "destructive", title: "Error saving section", description: error.message })
     } finally {
@@ -217,7 +227,7 @@ export default function ManageSectionsPage() {
       await batch.commit();
 
       toast({ title: "Section Deleted", description: `Section ${selectedSection.name} has been deleted.` })
-      fetchSectionsAndFaculty()
+      fetchInitialData()
       setSelectedSection(null);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error deleting section", description: error.message })
@@ -479,50 +489,96 @@ export default function ManageSectionsPage() {
             </div>
         </div>
 
-        <Card className="mt-6">
-            <CardHeader>
-                <div>
-                <CardTitle>Class Schedule</CardTitle>
-                <CardDescription>
-                    {selectedSection ? `Schedule for ${selectedSection.name}` : "Select a section to view its schedule"}
-                </CardDescription>
-            </div>
-            </CardHeader>
-            <CardContent>
-                {isLoading && selectedSection ? (
-                    <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-                ) : !selectedSection ? (
-                    <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
-                        <CalendarIcon className="h-10 w-10 mb-2"/>
-                        <p>No section selected.</p>
-                    </div>
-                ) : schedules.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
-                        <p>No schedules found for this section.</p>
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        {schedules.map(schedule => (
-                            <div key={schedule.id} className="flex justify-between items-center p-3 bg-muted/50 rounded-md">
-                                <div>
-                                    <p className="font-medium">{schedule.subject}</p>
-                                    <p className="text-sm text-muted-foreground">{schedule.startTime} - {schedule.endTime}</p>
-                                    <p className="text-xs text-muted-foreground">{schedule.facultyName}</p>
-                                </div>
-                                <div>
-                                    <Button variant="ghost" size="icon" onClick={() => openEditScheduleDialog(schedule)} className="mr-2">
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteSchedule(schedule.id)} className="text-destructive hover:text-destructive">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
+        <div className="grid gap-6 lg:grid-cols-2 mt-6">
+            <Card>
+                <CardHeader>
+                    <div>
+                    <CardTitle>Class Schedule</CardTitle>
+                    <CardDescription>
+                        {selectedSection ? `Schedule for ${selectedSection.name}` : "Select a section to view its schedule"}
+                    </CardDescription>
+                </div>
+                </CardHeader>
+                <CardContent>
+                    {isLoading && selectedSection ? (
+                        <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                    ) : !selectedSection ? (
+                        <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+                            <CalendarIcon className="h-10 w-10 mb-2"/>
+                            <p>No section selected.</p>
+                        </div>
+                    ) : schedules.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+                            <p>No schedules found for this section.</p>
+                        </div>
+                    ) : (
+                        <ScrollArea className="h-96">
+                            <div className="space-y-2 pr-4">
+                                {schedules.map(schedule => (
+                                    <div key={schedule.id} className="flex justify-between items-center p-3 bg-muted/50 rounded-md">
+                                        <div>
+                                            <p className="font-medium">{schedule.subject}</p>
+                                            <p className="text-sm text-muted-foreground">{schedule.startTime} - {schedule.endTime}</p>
+                                            <p className="text-xs text-muted-foreground">{schedule.facultyName}</p>
+                                        </div>
+                                        <div>
+                                            <Button variant="ghost" size="icon" onClick={() => openEditScheduleDialog(schedule)} className="mr-2">
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteSchedule(schedule.id)} className="text-destructive hover:text-destructive">
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
-                )}
-            </CardContent>
-        </Card>
+                        </ScrollArea>
+                    )}
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Students in Section</CardTitle>
+                    <CardDescription>
+                         {selectedSection ? `Students assigned to ${selectedSection.name}` : "Select a section to view students"}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                     {isLoading && selectedSection ? (
+                        <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                    ) : !selectedSection ? (
+                        <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+                            <BookUser className="h-10 w-10 mb-2"/>
+                            <p>No section selected.</p>
+                        </div>
+                    ) : studentsInSection.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+                            <p>No students assigned to this section.</p>
+                        </div>
+                    ) : (
+                        <ScrollArea className="h-96">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Name</TableHead>
+                                        <TableHead>RFID</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {studentsInSection.map(student => (
+                                        <TableRow key={student.id}>
+                                            <TableCell>{`${student.lastName}, ${student.firstName}`}</TableCell>
+                                            <TableCell className="font-mono text-xs">{student.rfid || 'N/A'}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </ScrollArea>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+
 
       {/* Section Dialog */}
       <Dialog open={isSectionDialogOpen} onOpenChange={setIsSectionDialogOpen}>
