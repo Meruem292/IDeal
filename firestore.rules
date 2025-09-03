@@ -8,8 +8,8 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isAuth() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    function isRole(role) {
+      return isAuth() && exists(/databases/$(database)/documents/$(role)/$(request.auth.uid));
     }
     
     function isSelf(userId) {
@@ -17,64 +17,45 @@ service cloud.firestore {
     }
 
     // --- Collection Rules ---
-
     match /admins/{userId} {
-      // Any authenticated user trying to log in needs to check if they are an admin.
-      allow get: if isAuth(); 
-      // Admins can list, update, and delete other admins.
-      allow list, update, delete: if isAdmin();
-      // An existing admin can create another admin.
-      allow create: if isAdmin();
+      allow get: if isAuth(); // Allow any auth user to check for their own doc
+      allow list, create, update, delete: if isRole('admins');
     }
 
     match /students/{studentId} {
-      // Any authenticated user can create a student record (for registration).
+      // Allow unauthenticated users to query for uniqueness check during registration.
+      // This is a calculated risk. A more secure approach might involve a Cloud Function.
+      allow list: if true; 
       allow create: if isAuth(); 
-      // An admin can list students. A student can get their own profile.
-      // Any authenticated user can check their own student document during login.
-      allow get: if isAuth();
-      allow list: if isAdmin();
-      // Only an admin or the student themselves can update their profile.
-      allow update: if isAdmin() || isSelf(studentId);
-      // Only an admin can delete a student.
-      allow delete: if isAdmin();
-
-      // Rules for the attendance sub-collection
-      match /attendance/{attendanceId} {
-        // An admin can create records (simulating the scanner)
-        allow create: if isAdmin();
-        // The student themselves or an admin can read the attendance records.
-        allow read: if isSelf(studentId) || isAdmin();
-        // Only admins can modify or delete specific attendance logs.
-        allow update, delete: if isAdmin();
-      }
+      allow get: if isAuth(); // Allow any auth user to check for their own doc
+      allow update: if isRole('admins') || isSelf(studentId);
+      allow delete: if isRole('admins');
     }
 
     match /faculty/{facultyId} {
-       // Any authenticated user can check their own faculty document during login.
-      allow get: if isAuth();
-      allow list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow get: if isAuth(); // Allow any auth user to check for their own doc
+      allow list: if isRole('admins') || isRole('faculty');
+      allow create, update, delete: if isRole('admins');
     }
     
     match /sections/{sectionId} {
-      allow read: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow get, list: if isRole('admins') || isRole('faculty');
+      allow create, update, delete: if isRole('admins');
       
       match /schedules/{scheduleId} {
-        allow read: if isAdmin();
-        allow create, update, delete: if isAdmin();
+        allow get, list: if isRole('admins') || isRole('faculty');
+        allow create, update, delete: if isRole('admins');
       }
     }
 
-    // --- RFID History Collection ---
-    // This allows any service (like an ESP32) to write a scan.
-    // In production, you would secure this with a secret key or cloud function.
     match /rfid_history/{docId} {
+      // This rule is still insecure. In a real-world scenario,
+      // you would use a Cloud Function with a secret key for the ESP32 to call.
       allow create: if true; 
-      // Admins can read all history. Students can read their own.
-      allow read: if isAdmin() || (isAuth() && resource.data.uid == get(/databases/$(database)/documents/students/$(request.auth.uid)).data.rfid);
-      allow update, delete: if isAdmin();
+      
+      // Allow admins to read all history, students to read their own
+      allow get, list: if isRole('admins') || (isRole('students') && query.filters[0][2] == request.auth.uid);
+      allow update, delete: if isRole('admins');
     }
   }
 }

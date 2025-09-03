@@ -13,6 +13,7 @@ export type Student = {
     contactNumber: string
   }
   rfid: string | null
+  macAddress: string | null
   sectionId?: string | null
   section?: string
 }
@@ -50,6 +51,7 @@ export const mockStudents: Student[] = [
       contactNumber: "555-123-4567",
     },
     rfid: "A1B2C3D4",
+    macAddress: "00:1A:2B:3C:4D:5E",
   },
   {
     id: "S002",
@@ -66,6 +68,7 @@ export const mockStudents: Student[] = [
       contactNumber: "555-987-6543",
     },
     rfid: null,
+    macAddress: null,
   },
   {
     id: "S003",
@@ -82,6 +85,7 @@ export const mockStudents: Student[] = [
       contactNumber: "555-111-2222",
     },
     rfid: "E5F6G7H8",
+    macAddress: "00:1A:2B:3C:4D:5F",
   },
   {
     id: "S004",
@@ -98,6 +102,7 @@ export const mockStudents: Student[] = [
       contactNumber: "555-333-4444",
     },
     rfid: "I9J0K1L2",
+    macAddress: "00:1A:2B:3C:4D:6A",
   },
   {
     id: "S005",
@@ -114,6 +119,7 @@ export const mockStudents: Student[] = [
       contactNumber: "555-555-6666",
     },
     rfid: null,
+    macAddress: null,
   },
 ]
 

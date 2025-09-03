@@ -6,7 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { CheckCircle, Loader2 } from "lucide-react"
 import { createUserWithEmailAndPassword } from "firebase/auth"
-import { doc, setDoc } from "firebase/firestore"
+import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 
 import { Button } from "@/components/ui/button"
@@ -29,6 +29,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 type PsgcRecord = {
   code: string;
@@ -39,6 +50,7 @@ export function RegisterForm() {
   const { toast } = useToast()
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   
   // Student fields
   const [firstName, setFirstName] = useState("")
@@ -50,6 +62,7 @@ export function RegisterForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [rfid, setRfid] = useState("")
+  const [macAddress, setMacAddress] = useState("");
 
   // Guardian fields
   const [guardianName, setGuardianName] = useState("")
@@ -152,29 +165,8 @@ export function RegisterForm() {
   }, [selectedCity, toast]);
 
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const proceedWithRegistration = async () => {
     setIsLoading(true)
-
-    if (!gender) {
-      toast({
-        variant: "destructive",
-        title: "Registration Failed",
-        description: "Please select a gender.",
-      })
-      setIsLoading(false)
-      return
-    }
-
-    if (!selectedBarangay) {
-      toast({
-        variant: "destructive",
-        title: "Registration Failed",
-        description: "Please select a complete address.",
-      })
-      setIsLoading(false)
-      return
-    }
 
     const fullAddress = [
         barangays.find(b => b.code === selectedBarangay)?.name,
@@ -203,6 +195,7 @@ export function RegisterForm() {
           contactNumber: guardianContact,
         },
         rfid: rfid || null,
+        macAddress: macAddress || null,
         status: "active",
         role: "student",
       });
@@ -225,6 +218,62 @@ export function RegisterForm() {
     }
   }
 
+  const handleRegisterAttempt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    if (!gender || !selectedBarangay || !rfid || !macAddress) {
+      toast({
+        variant: "destructive",
+        title: "Missing Information",
+        description: "Please fill out all required fields, including RFID and MAC Address.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Check for existing RFID
+      const rfidQuery = query(collection(db, "students"), where("rfid", "==", rfid));
+      const rfidSnapshot = await getDocs(rfidQuery);
+      if (!rfidSnapshot.empty) {
+        toast({
+          variant: "destructive",
+          title: "Registration Failed",
+          description: "This RFID is already registered to another student.",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Check for existing MAC Address
+      const macQuery = query(collection(db, "students"), where("macAddress", "==", macAddress));
+      const macSnapshot = await getDocs(macQuery);
+      if (!macSnapshot.empty) {
+        toast({
+          variant: "destructive",
+          title: "Registration Failed",
+          description: "This MAC Address is already registered to another student.",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      // If all checks pass, open confirmation dialog
+      setIsConfirmOpen(true);
+
+    } catch (error: any) {
+       toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: error.message || "Could not validate registration details.",
+      });
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
         <div className="absolute top-8 left-8">
@@ -234,7 +283,7 @@ export function RegisterForm() {
          </Link>
        </div>
       <Card className="w-full max-w-2xl">
-        <form onSubmit={handleRegister}>
+        <form onSubmit={handleRegisterAttempt}>
           <CardHeader>
             <CardTitle className="text-2xl font-headline">Register a New Student</CardTitle>
             <CardDescription>
@@ -267,7 +316,7 @@ export function RegisterForm() {
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="gender">Gender</Label>
-                        <Select onValueChange={(v) => setGender(v as any)} value={gender} disabled={isLoading}>
+                        <Select onValueChange={(v) => setGender(v as any)} value={gender} disabled={isLoading} required>
                             <SelectTrigger id="gender">
                                 <SelectValue placeholder="Select gender" />
                             </SelectTrigger>
@@ -284,16 +333,32 @@ export function RegisterForm() {
                     </div>
                 </div>
 
-                <div className="grid gap-2">
-                    <Label htmlFor="rfid">RFID No. (Optional)</Label>
-                    <Input id="rfid" placeholder="e.g, 766EF94D" disabled={isLoading} value={rfid} onChange={(e) => setRfid(e.target.value.toUpperCase())} className="font-mono"/>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                      <Label htmlFor="rfid">RFID No.</Label>
+                      <Input id="rfid" placeholder="e.g, 766EF94D" required disabled={isLoading} value={rfid} onChange={(e) => setRfid(e.target.value.toUpperCase())} className="font-mono"/>
+                  </div>
+                  <div className="grid gap-2">
+                      <Label htmlFor="mac-address">MAC Address</Label>
+                      <Input 
+                        id="mac-address" 
+                        placeholder="XX:XX:XX:XX:XX:XX" 
+                        required 
+                        disabled={isLoading} 
+                        value={macAddress} 
+                        onChange={(e) => setMacAddress(e.target.value)} 
+                        className="font-mono"
+                        pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
+                        title="Please enter a valid MAC address format (e.g., 00:1A:2B:3C:4D:5E)"
+                      />
+                  </div>
                 </div>
                 
                 <h3 className="text-lg font-semibold text-primary pt-4">Address</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="region">Region</Label>
-                        <Select onValueChange={setSelectedRegion} value={selectedRegion} disabled={isLoading || regions.length === 0}>
+                        <Select onValueChange={setSelectedRegion} value={selectedRegion} disabled={isLoading || regions.length === 0} required>
                             <SelectTrigger id="region"><SelectValue placeholder="Select region" /></SelectTrigger>
                             <SelectContent>
                                 {regions.map((region) => (<SelectItem key={region.code} value={region.code}>{region.name}</SelectItem>))}
@@ -303,7 +368,7 @@ export function RegisterForm() {
                     {selectedRegion && (
                         <div className="grid gap-2">
                             <Label htmlFor="province">Province</Label>
-                            <Select onValueChange={setSelectedProvince} value={selectedProvince} disabled={isLoading || provinces.length === 0}>
+                            <Select onValueChange={setSelectedProvince} value={selectedProvince} disabled={isLoading || provinces.length === 0} required>
                                 <SelectTrigger id="province"><SelectValue placeholder="Select province" /></SelectTrigger>
                                 <SelectContent>
                                     {provinces.map((province) => (<SelectItem key={province.code} value={province.code}>{province.name}</SelectItem>))}
@@ -314,7 +379,7 @@ export function RegisterForm() {
                     {selectedProvince && (
                         <div className="grid gap-2">
                             <Label htmlFor="city">City/Municipality</Label>
-                            <Select onValueChange={setSelectedCity} value={selectedCity} disabled={isLoading || cities.length === 0}>
+                            <Select onValueChange={setSelectedCity} value={selectedCity} disabled={isLoading || cities.length === 0} required>
                                 <SelectTrigger id="city"><SelectValue placeholder="Select city/municipality" /></SelectTrigger>
                                 <SelectContent>
                                     {cities.map((city) => (<SelectItem key={city.code} value={city.code}>{city.name}</SelectItem>))}
@@ -325,7 +390,7 @@ export function RegisterForm() {
                     {selectedCity && (
                         <div className="grid gap-2">
                             <Label htmlFor="barangay">Barangay</Label>
-                            <Select onValueChange={setSelectedBarangay} value={selectedBarangay} disabled={isLoading || barangays.length === 0}>
+                            <Select onValueChange={setSelectedBarangay} value={selectedBarangay} disabled={isLoading || barangays.length === 0} required>
                                 <SelectTrigger id="barangay"><SelectValue placeholder="Select barangay" /></SelectTrigger>
                                 <SelectContent>
                                     {barangays.map((barangay) => (<SelectItem key={barangay.code} value={barangay.code}>{barangay.name}</SelectItem>))}
@@ -367,10 +432,28 @@ export function RegisterForm() {
             </ScrollArea>
           </CardContent>
           <CardFooter className="flex flex-col gap-4 pt-6">
-            <Button className="w-full" type="submit" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Student Account
-            </Button>
+            <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+              <AlertDialogTrigger asChild>
+                <Button className="w-full" type="submit" disabled={isLoading}>
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Create Student Account
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirm Registration</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Please ensure all the information you have provided is correct. This action cannot be easily undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={proceedWithRegistration}>
+                    Confirm and Register
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <div className="text-center text-sm text-muted-foreground">
                 Already have an account?{" "}
                 <Link href="/login" className="underline hover:text-primary">
@@ -383,9 +466,3 @@ export function RegisterForm() {
     </div>
   )
 }
-
-    
-
-    
-
-    
