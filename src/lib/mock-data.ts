@@ -1,3 +1,4 @@
+
 export type Student = {
   id: string
   firstName: string
@@ -16,6 +17,7 @@ export type Student = {
   macAddress: string | null
   sectionId?: string | null
   section?: string
+  role: "student"
 }
 
 export type AttendanceRecord = {
@@ -52,6 +54,7 @@ export const mockStudents: Student[] = [
     },
     rfid: "A1B2C3D4",
     macAddress: "00:1A:2B:3C:4D:5E",
+    role: "student",
   },
   {
     id: "S002",
@@ -69,6 +72,7 @@ export const mockStudents: Student[] = [
     },
     rfid: null,
     macAddress: null,
+    role: "student",
   },
   {
     id: "S003",
@@ -86,6 +90,7 @@ export const mockStudents: Student[] = [
     },
     rfid: "E5F6G7H8",
     macAddress: "00:1A:2B:3C:4D:5F",
+    role: "student",
   },
   {
     id: "S004",
@@ -103,6 +108,7 @@ export const mockStudents: Student[] = [
     },
     rfid: "I9J0K1L2",
     macAddress: "00:1A:2B:3C:4D:6A",
+    role: "student",
   },
   {
     id: "S005",
@@ -120,6 +126,7 @@ export const mockStudents: Student[] = [
     },
     rfid: null,
     macAddress: null,
+    role: "student",
   },
 ]
 
@@ -265,3 +272,5 @@ export const mockFacultyApprovals: FacultyApproval[] = [
     department: "Literature",
   },
 ]
+
+    
