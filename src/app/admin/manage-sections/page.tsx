@@ -2,6 +2,7 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
+import Link from "next/link"
 import {
   Card,
   CardContent,
@@ -567,7 +568,11 @@ export default function ManageSectionsPage() {
                                 <TableBody>
                                     {studentsInSection.map(student => (
                                         <TableRow key={student.id}>
-                                            <TableCell>{`${student.lastName}, ${student.firstName}`}</TableCell>
+                                            <TableCell>
+                                                <Link href={`/admin/student/${student.id}`} className="hover:underline text-primary">
+                                                    {`${student.lastName}, ${student.firstName}`}
+                                                </Link>
+                                            </TableCell>
                                             <TableCell className="font-mono text-xs">{student.rfid || 'N/A'}</TableCell>
                                         </TableRow>
                                     ))}

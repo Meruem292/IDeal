@@ -25,6 +25,7 @@ import {
   History,
   Fingerprint,
   Loader2,
+  ChevronLeft
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
@@ -140,6 +141,29 @@ function UserNav({ role }: { role: UserRole }) {
   )
 }
 
+function PageHeaderTitle() {
+    const pathname = usePathname();
+    const router = useRouter();
+
+    const isStudentProfile = pathname.startsWith('/admin/student/');
+    const defaultTitle = pathname.split("/").pop()?.replace(/-/g, " ") || "";
+
+    return (
+        <div className="flex items-center gap-2">
+        {isStudentProfile && (
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => router.back()}>
+                <ChevronLeft className="h-4 w-4" />
+                <span className="sr-only">Back</span>
+            </Button>
+        )}
+         <h1 className="text-xl font-semibold font-headline capitalize">
+            {isStudentProfile ? "Student Profile" : defaultTitle}
+        </h1>
+        </div>
+    )
+
+}
+
 export function DashboardLayout({
   children,
   role,
@@ -206,9 +230,7 @@ export function DashboardLayout({
             <SidebarTrigger />
           </div>
           <div className="flex-1">
-            <h1 className="text-xl font-semibold font-headline capitalize">
-              {pathname.split("/").pop()?.replace(/-/g, " ")}
-            </h1>
+             <PageHeaderTitle />
           </div>
           <UserNav role={role} />
         </header>
