@@ -132,10 +132,6 @@ function UserNav({ role }: { role: UserRole }) {
                 </Link>
             </DropdownMenuItem>
         )}
-        <DropdownMenuItem>
-          <ModeToggle />
-          <span className="ml-2">Toggle Theme</span>
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
@@ -237,7 +233,10 @@ export function DashboardLayout({
           <div className="flex-1">
              <PageHeaderTitle />
           </div>
-          <UserNav role={role} />
+          <div className="flex items-center gap-2">
+            <ModeToggle />
+            <UserNav role={role} />
+          </div>
         </header>
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </SidebarInset>
