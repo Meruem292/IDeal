@@ -277,6 +277,17 @@ export default function ManageSectionsPage() {
   };
 
   const handleScanSchedule = async () => {
+    // Check for API key before anything else
+    if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
+         toast({
+            variant: "destructive",
+            title: "Configuration Error",
+            description: "The Gemini API key is missing. Please add NEXT_PUBLIC_GEMINI_API_KEY to your environment variables.",
+            duration: 10000,
+        });
+        return;
+    }
+
     if (!scheduleImage || !selectedSection) {
       toast({
         variant: "destructive",
@@ -751,3 +762,5 @@ export default function ManageSectionsPage() {
     </DashboardLayout>
   )
 }
+
+    
