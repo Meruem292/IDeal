@@ -44,6 +44,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useState, useEffect } from "react"
 import type { User as FirebaseAuthUser } from "firebase/auth"
 import { useAuthRole } from "@/hooks/use-auth-role"
+import { ModeToggle } from "@/components/mode-toggle"
 
 type UserRole = "student" | "faculty" | "admin"
 
@@ -131,6 +132,10 @@ function UserNav({ role }: { role: UserRole }) {
                 </Link>
             </DropdownMenuItem>
         )}
+        <DropdownMenuItem>
+          <ModeToggle />
+          <span className="ml-2">Toggle Theme</span>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />

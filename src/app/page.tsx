@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Fingerprint, History, Users } from "lucide-react";
+import { ModeToggle } from "@/components/mode-toggle";
 
 function Logo() {
   return (
@@ -19,6 +20,7 @@ export default function Home() {
         <div className="container flex h-16 items-center justify-between">
           <Logo />
           <div className="flex items-center gap-2">
+            <ModeToggle />
             <Button variant="ghost" asChild>
               <Link href="/login">Login</Link>
             </Button>
