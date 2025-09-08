@@ -25,7 +25,8 @@ import {
   History,
   Fingerprint,
   Loader2,
-  ChevronLeft
+  ChevronLeft,
+  MonitorSmartphone,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
@@ -63,6 +64,7 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
     { href: "/admin/manage-students", label: "Manage Students", icon: BookUser },
     { href: "/admin/create-faculty", label: "Create Faculty", icon: UserPlus },
     { href: "/admin/manage-sections", label: "Manage Sections", icon: ClipboardList },
+    { href: "/admin/manage-scanners", label: "Manage Scanners", icon: MonitorSmartphone },
     { href: "/admin/attendance", label: "Attendance Logs", icon: History },
     { href: "/admin/rfid-history", label: "RFID History", icon: Fingerprint },
   ],
