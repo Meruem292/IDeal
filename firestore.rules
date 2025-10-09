@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -19,85 +18,58 @@ service cloud.firestore {
 
     // --- Admins Collection ---
     match /admins/{userId} {
-      // Any authenticated user can check if they are an admin (login check).
       allow get: if isAuth();
-      // Only admins can list, create, update, delete.
       allow list, create, update, delete: if isRole("admins");
     }
 
     // --- Students Collection ---
     match /students/{studentId} {
-      // Allow unauthenticated list for ESP32 RFID matching / uniqueness check.
-      // In production, replace with Cloud Function + secret key.
-      allow list: if true;
+      // ESP32 unauthenticated read support
+      allow list: if true;  
+      allow get: if true;   
 
-      // Any authenticated user can create a student record (registration).
       allow create: if isAuth();
-
-      // Any authenticated user can fetch their own doc (login/profile check).
-      allow get: if isAuth();
-
-      // Students can update their own profile; admins can update all.
       allow update: if isRole("admins") || isSelf(studentId);
-
-      // Only admins can delete a student.
       allow delete: if isRole("admins");
 
-      // --- Attendance Subcollection ---
       match /attendance/{attendanceId} {
-        // Only admins (simulating scanner / adding logs).
         allow create: if isRole("admins");
-        // Student can see their own logs, admins can see all.
         allow read: if isRole("admins") || isSelf(studentId);
-        // Only admins can modify/delete.
         allow update, delete: if isRole("admins");
       }
     }
 
     // --- Faculty Collection ---
     match /faculty/{facultyId} {
-      // Authenticated users can read their own doc (login).
       allow get: if isAuth();
-      // Admins & faculty can list.
       allow list: if isRole("admins") || isRole("faculty");
-      // Only admins can create, update, delete.
       allow create, update, delete: if isRole("admins");
     }
 
     // --- Sections Collection ---
     match /sections/{sectionId} {
-      // Admins & faculty can read/list.
       allow get, list: if isRole("admins") || isRole("faculty");
-      // Only admins can write.
       allow create, update, delete: if isRole("admins");
 
       match /schedules/{scheduleId} {
-        allow get, list: if isRole("admins") || isRole("faculty");
+        // ESP32 unauthenticated read support
+        allow get, list: if true; 
         allow create, update, delete: if isRole("admins");
       }
     }
 
     // --- Scanners Collection ---
     match /scanners/{scannerId} {
-      // Only admins can manage scanner devices.
-      allow read, write: if isRole("admins");
+      // ESP32 unauthenticated read support
+      allow get, list: if true;  
+      allow create, update, delete: if isRole("admins");
     }
-
 
     // --- RFID History Collection ---
     match /rfid_history/{docId} {
-      // ESP32 writes allowed (insecure, should use Cloud Function + secret).
-      allow create: if true;
-
-      // Admins can read all; students can only read their own logs by querying their rfid.
-      // Note: A specific 'get' rule on rfid_history is not secure for students as they could guess doc Ids.
-      // Instead, rely on query rules where we check against their auth uid.
-      allow list, get: if isRole("admins");
-       
-      // Allow students to list their own records via queries
-      // e.g. where("uid", "==", studentRfidFromTheirProfile)
+      allow create: if true; // ESP32 unauthenticated writes
+      allow get, list: if isRole("admins") || isRole("faculty");
       allow list: if isRole("students");
-
       allow update, delete: if isRole("admins");
     }
   }
