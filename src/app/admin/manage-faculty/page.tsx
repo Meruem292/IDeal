@@ -66,6 +66,9 @@ export default function ManageFacultyPage() {
 
   const [searchTerm, setSearchTerm] = useState("")
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const ROWS_PER_PAGE = 10;
+
   const { toast } = useToast()
 
   const fetchFaculty = async () => {
@@ -89,7 +92,6 @@ export default function ManageFacultyPage() {
     fetchFaculty()
   }, [])
   
-  // One-time check to create the admin document if it doesn't exist
   useEffect(() => {
     const bootstrapAdmin = async () => {
       const currentUser = auth.currentUser;
@@ -130,7 +132,7 @@ export default function ManageFacultyPage() {
     if (!formData) return;
     setIsProcessing(true);
 
-    if (formData.id) { // This is an update
+    if (formData.id) {
       try {
         const facultyRef = doc(db, "faculty", formData.id);
         await updateDoc(facultyRef, {
@@ -150,7 +152,7 @@ export default function ManageFacultyPage() {
         setIsFacultyDialogOpen(false)
         setFormData(null)
       }
-    } else { // This is a create
+    } else {
         if (!formData.email || !formData.password) {
             toast({ variant: "destructive", title: "Missing fields", description: "Email and password are required to create a new faculty." });
             setIsProcessing(false);
@@ -213,7 +215,7 @@ export default function ManageFacultyPage() {
     try {
       await deleteDoc(doc(db, "faculty", selectedFaculty.id))
       toast({ title: "Faculty Deleted", description: `Account for ${selectedFaculty.name} has been deleted.` })
-      fetchFaculty() // Refresh list
+      fetchFaculty()
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -241,6 +243,17 @@ export default function ManageFacultyPage() {
     if (!searchTerm) return faculty;
     return faculty.filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [faculty, searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const totalPages = Math.ceil(filteredFaculty.length / ROWS_PER_PAGE);
+  const paginatedFaculty = useMemo(() => {
+    const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
+    const endIndex = startIndex + ROWS_PER_PAGE;
+    return filteredFaculty.slice(startIndex, endIndex);
+  }, [filteredFaculty, currentPage]);
 
 
   return (
@@ -284,7 +297,7 @@ export default function ManageFacultyPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredFaculty.map((member) => (
+                {paginatedFaculty.map((member) => (
                   <TableRow key={member.id}>
                     <TableCell className="font-medium">{member.name}</TableCell>
                     <TableCell>{member.email}</TableCell>
@@ -303,6 +316,31 @@ export default function ManageFacultyPage() {
             </Table>
           )}
         </CardContent>
+        {totalPages > 1 && (
+            <CardFooter className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                >
+                    Previous
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                >
+                    Next
+                </Button>
+            </div>
+            </CardFooter>
+        )}
       </Card>
 
       {/* Create/Edit Dialog */}

@@ -1,6 +1,6 @@
 
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import {
   Card,
@@ -8,6 +8,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card"
 import {
   Table,
@@ -17,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, where, query } from "firebase/firestore"
 import { Loader2 } from "lucide-react"
@@ -31,19 +33,20 @@ type RfidRegistration = {
 export default function RfidHistoryPage() {
     const [registrations, setRegistrations] = useState<RfidRegistration[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const ROWS_PER_PAGE = 10;
 
     useEffect(() => {
         const fetchRfidHistory = async () => {
             setIsLoading(true);
             try {
-                // Query students collection for documents that have a non-null rfid field
                 const studentsQuery = query(collection(db, "students"), where("rfid", "!=", null));
                 const studentsSnapshot = await getDocs(studentsQuery);
                 
                 const registrationList: RfidRegistration[] = [];
                 studentsSnapshot.forEach(doc => {
                     const studentData = doc.data();
-                    if (studentData.rfid) { // Should always be true due to query, but good practice
+                    if (studentData.rfid) {
                         registrationList.push({
                             rfid: studentData.rfid,
                             studentId: doc.id,
@@ -62,6 +65,13 @@ export default function RfidHistoryPage() {
         }
         fetchRfidHistory();
     }, []);
+
+    const totalPages = Math.ceil(registrations.length / ROWS_PER_PAGE);
+    const paginatedRegistrations = useMemo(() => {
+        const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
+        const endIndex = startIndex + ROWS_PER_PAGE;
+        return registrations.slice(startIndex, endIndex);
+    }, [registrations, currentPage]);
 
     return (
         <DashboardLayout role="admin">
@@ -87,7 +97,7 @@ export default function RfidHistoryPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {registrations.map(reg => (
+                                {paginatedRegistrations.map(reg => (
                                     <TableRow key={reg.rfid}>
                                         <TableCell className="font-medium font-mono">{reg.rfid}</TableCell>
                                         <TableCell>{reg.studentName}</TableCell>
@@ -98,6 +108,31 @@ export default function RfidHistoryPage() {
                         </Table>
                     )}
                 </CardContent>
+                {totalPages > 1 && (
+                    <CardFooter className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                        >
+                            Previous
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Next
+                        </Button>
+                    </div>
+                    </CardFooter>
+                )}
             </Card>
         </DashboardLayout>
     )

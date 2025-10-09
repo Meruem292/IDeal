@@ -1,6 +1,6 @@
 
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import {
   Card,
@@ -64,6 +64,9 @@ export default function ManageScannersPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   
   const [selectedScanner, setSelectedScanner] = useState<Scanner | null>(null)
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ROWS_PER_PAGE = 10;
   
   const { toast } = useToast()
 
@@ -165,6 +168,13 @@ export default function ManageScannersPage() {
     setIsDeleteDialogOpen(true)
   }
 
+  const totalPages = Math.ceil(scanners.length / ROWS_PER_PAGE);
+  const paginatedScanners = useMemo(() => {
+    const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
+    const endIndex = startIndex + ROWS_PER_PAGE;
+    return scanners.slice(startIndex, endIndex);
+  }, [scanners, currentPage]);
+
   return (
     <DashboardLayout role="admin">
       <Card>
@@ -194,7 +204,7 @@ export default function ManageScannersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {scanners.map((scanner) => (
+                {paginatedScanners.map((scanner) => (
                   <TableRow key={scanner.id}>
                     <TableCell className="font-medium font-mono">{scanner.deviceId}</TableCell>
                     <TableCell>{scanner.sectionName}</TableCell>
@@ -220,6 +230,31 @@ export default function ManageScannersPage() {
             </div>
           )}
         </CardContent>
+        {totalPages > 1 && (
+            <CardFooter className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                >
+                    Previous
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                >
+                    Next
+                </Button>
+            </div>
+            </CardFooter>
+        )}
       </Card>
 
       {/* Add/Edit Scanner Dialog */}

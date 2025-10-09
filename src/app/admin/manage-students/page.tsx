@@ -59,13 +59,14 @@ export default function ManageStudentsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   
-  // State for the main student list search
   const [mainSearchTerm, setMainSearchTerm] = useState("");
   
-  // State for Quick Sectioning
   const [quickSectionId, setQuickSectionId] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [quickSectionSearchTerm, setQuickSectionSearchTerm] = useState("");
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const ROWS_PER_PAGE = 10;
 
   const { toast } = useToast()
 
@@ -105,7 +106,6 @@ export default function ManageStudentsPage() {
     if (!selectedStudent) return
     setIsProcessing(true)
     try {
-      // Also delete related attendance if any
       const attendanceQuery = await getDocs(collection(db, `students/${selectedStudent.id}/attendance`));
       const batch = writeBatch(db);
       attendanceQuery.docs.forEach(doc => {
@@ -115,7 +115,7 @@ export default function ManageStudentsPage() {
       await batch.commit();
 
       toast({ title: "Student Deleted", description: `Record for ${selectedStudent.firstName} ${selectedStudent.lastName} has been deleted.` })
-      fetchStudentsAndSections() // Refresh list
+      fetchStudentsAndSections()
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -144,7 +144,7 @@ export default function ManageStudentsPage() {
         sectionId: sectionIdToSave,
       });
       toast({ title: "Student Updated", description: "Student details have been updated." })
-      fetchStudentsAndSections() // Refresh list
+      fetchStudentsAndSections()
     } catch (error: any) {
        toast({
         variant: "destructive",
@@ -178,6 +178,17 @@ export default function ManageStudentsPage() {
       (student.rfid && student.rfid.toLowerCase().includes(lowercasedTerm))
     );
   }, [students, mainSearchTerm]);
+  
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [mainSearchTerm]);
+  
+  const totalPages = Math.ceil(filteredStudents.length / ROWS_PER_PAGE);
+  const paginatedStudents = useMemo(() => {
+    const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
+    const endIndex = startIndex + ROWS_PER_PAGE;
+    return filteredStudents.slice(startIndex, endIndex);
+  }, [filteredStudents, currentPage]);
 
 
   const filteredStudentsForSectioning = useMemo(() => {
@@ -230,7 +241,6 @@ export default function ManageStudentsPage() {
 
         toast({ title: "Students Assigned", description: `${selectedStudentIds.size} student(s) have been assigned to the section.` });
         
-        // Refresh data and reset state
         fetchStudentsAndSections();
         setSelectedStudentIds(new Set());
         setQuickSectionSearchTerm("");
@@ -282,7 +292,7 @@ export default function ManageStudentsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredStudents.map((student) => (
+                        {paginatedStudents.map((student) => (
                         <TableRow key={student.id}>
                             <TableCell className="font-medium">{`${student.lastName}, ${student.firstName}`}</TableCell>
                             <TableCell>{student.section}</TableCell>
@@ -310,6 +320,31 @@ export default function ManageStudentsPage() {
                     </Table>
                 )}
                 </CardContent>
+                 {totalPages > 1 && (
+                  <CardFooter className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                        >
+                            Previous
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Next
+                        </Button>
+                    </div>
+                  </CardFooter>
+                )}
             </Card>
         </div>
         <div className="lg:col-span-1">
@@ -388,7 +423,6 @@ export default function ManageStudentsPage() {
         </div>
       </div>
 
-      {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <form onSubmit={handleUpdate}>
@@ -444,7 +478,6 @@ export default function ManageStudentsPage() {
         </DialogContent>
       </Dialog>
       
-      {/* Delete Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
             <DialogHeader>
@@ -465,7 +498,3 @@ export default function ManageStudentsPage() {
     </DashboardLayout>
   )
 }
-
-    
-
-    

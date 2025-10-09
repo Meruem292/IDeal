@@ -97,6 +97,8 @@ export default function ManageSectionsPage() {
   const [scheduleImage, setScheduleImage] = useState<File | null>(null);
   const [scheduleImagePreview, setScheduleImagePreview] = useState<string | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const ROWS_PER_PAGE = 10;
 
   const { toast } = useToast()
 
@@ -178,10 +180,10 @@ export default function ManageSectionsPage() {
     };
     
     try {
-      if (selectedSection.id === 'new') { // Creating new section
+      if (selectedSection.id === 'new') {
         await addDoc(collection(db, "sections"), sectionData)
         toast({ title: "Section Created", description: `Section ${sectionData.name} has been created.` })
-      } else { // Updating existing section
+      } else {
         const sectionRef = doc(db, "sections", selectedSection.id);
         await updateDoc(sectionRef, sectionData);
         toast({ title: "Section Updated", description: "Section details have been updated." })
@@ -277,7 +279,6 @@ export default function ManageSectionsPage() {
   };
 
   const handleScanSchedule = async () => {
-    // Check for API key before anything else
     if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
          toast({
             variant: "destructive",
@@ -317,10 +318,8 @@ export default function ManageSectionsPage() {
         setScannedSchedules(result.schedules.map(s => ({...s, facultyId: null})));
         setIsScanReviewDialogOpen(true);
 
-        // Reset image state
         setScheduleImage(null);
         setScheduleImagePreview(null);
-        // Clear file input
         const fileInput = document.getElementById('picture') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
       };
@@ -356,7 +355,6 @@ export default function ManageSectionsPage() {
             return;
         }
 
-        // Overlap validation
         for (let i = 0; i < validSchedules.length; i++) {
             for (let j = i + 1; j < validSchedules.length; j++) {
                 const s1 = validSchedules[i];
@@ -398,6 +396,12 @@ export default function ManageSectionsPage() {
         }
     };
 
+  const totalPages = Math.ceil(sections.length / ROWS_PER_PAGE);
+  const paginatedSections = useMemo(() => {
+    const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
+    const endIndex = startIndex + ROWS_PER_PAGE;
+    return sections.slice(startIndex, endIndex);
+  }, [sections, currentPage]);
 
   return (
     <DashboardLayout role="admin">
@@ -429,7 +433,7 @@ export default function ManageSectionsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {sections.map((section) => (
+                        {paginatedSections.map((section) => (
                         <TableRow 
                             key={section.id} 
                             onClick={() => setSelectedSection(section)}
@@ -451,6 +455,31 @@ export default function ManageSectionsPage() {
                     </Table>
                 )}
                 </CardContent>
+                {totalPages > 1 && (
+                  <CardFooter className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                        >
+                            Previous
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Next
+                        </Button>
+                    </div>
+                  </CardFooter>
+                )}
             </Card>
 
             <div className="space-y-6">
@@ -762,5 +791,3 @@ export default function ManageSectionsPage() {
     </DashboardLayout>
   )
 }
-
-    

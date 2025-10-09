@@ -1,6 +1,6 @@
 
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import {
   Card,
@@ -8,6 +8,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter
 } from "@/components/ui/card"
 import {
   Table,
@@ -17,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, query, orderBy } from "firebase/firestore"
 import { Loader2 } from "lucide-react"
@@ -27,12 +29,11 @@ type AttendanceLog = {
     id: string;
     studentName: string;
     rfid: string;
-    time: string; // Keep as string from Firestore
+    time: string;
 };
 
 const formatScanTime = (time: string) => {
     try {
-        // The timestamp from Firestore is a string like "YYYY-MM-DD HH:MM:SS"
         const date = new Date(time);
         if (isNaN(date.getTime())) {
             return 'Invalid Date';
@@ -47,41 +48,38 @@ const formatScanTime = (time: string) => {
 export default function AttendancePage() {
     const [logs, setLogs] = useState<AttendanceLog[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const ROWS_PER_PAGE = 10;
 
     useEffect(() => {
         const fetchAttendance = async () => {
             setIsLoading(true);
             try {
-                // 1. Fetch all students to create a map from RFID to Student Name
                 const studentsSnapshot = await getDocs(collection(db, "students"));
                 const rfidToStudentMap = new Map<string, string>();
                 studentsSnapshot.forEach(doc => {
                     const student = doc.data() as Student;
                     if (student.rfid) {
-                        // Ensure RFID is stored consistently, e.g., uppercase
                         rfidToStudentMap.set(student.rfid.toUpperCase(), `${student.firstName} ${student.lastName}`);
                     }
                 });
 
-                // 2. Fetch all attendance records from the rfid_history collection
                 const historyQuery = query(collection(db, 'rfid_history'));
                 const historySnapshot = await getDocs(historyQuery);
                 
                 let attendanceList: AttendanceLog[] = [];
                 historySnapshot.forEach(doc => {
                     const data = doc.data();
-                    // Use the UID from the scan (and normalize to uppercase) to find the student's name
                     const studentName = rfidToStudentMap.get(data.uid.toUpperCase()) || 'Unknown Student';
 
                     attendanceList.push({
                         id: doc.id,
                         studentName: studentName,
                         rfid: data.uid,
-                        time: data.time, // Keep as string
+                        time: data.time,
                     });
                 });
 
-                // 3. Sort the list chronologically by converting string date to Date object
                 attendanceList.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
                 setLogs(attendanceList);
@@ -89,7 +87,6 @@ export default function AttendancePage() {
             } catch (error: any) {
                  if (error.message.includes("requires an index")) {
                     console.error("Firestore index required. Please check the Firebase console for the link to create it.", error);
-                    // Optionally, set an error state to inform the user.
                 } else {
                     console.error("Error fetching attendance logs: ", error);
                 }
@@ -99,6 +96,13 @@ export default function AttendancePage() {
         }
         fetchAttendance();
     }, []);
+
+    const totalPages = Math.ceil(logs.length / ROWS_PER_PAGE);
+    const paginatedLogs = useMemo(() => {
+        const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
+        const endIndex = startIndex + ROWS_PER_PAGE;
+        return logs.slice(startIndex, endIndex);
+    }, [logs, currentPage]);
 
     return (
         <DashboardLayout role="admin">
@@ -124,7 +128,7 @@ export default function AttendancePage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {logs.map(log => (
+                                {paginatedLogs.map(log => (
                                     <TableRow key={log.id}>
                                         <TableCell className="font-medium">{log.studentName}</TableCell>
                                         <TableCell>{log.rfid}</TableCell>
@@ -139,6 +143,31 @@ export default function AttendancePage() {
                         </div>
                     )}
                 </CardContent>
+                 {totalPages > 1 && (
+                  <CardFooter className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                        >
+                            Previous
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Next
+                        </Button>
+                    </div>
+                  </CardFooter>
+                )}
             </Card>
         </DashboardLayout>
     )
