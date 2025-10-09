@@ -1,3 +1,6 @@
+
+"use client"
+import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import {
   Card,
@@ -16,9 +19,29 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { mockAttendance, mockStudents, AttendanceRecord, Student } from "@/lib/mock-data"
+import { Loader2 } from "lucide-react"
+import { db } from "@/lib/firebase"
+import { collection, getDocs, query, where } from "firebase/firestore"
+import { format, startOfDay, endOfDay } from "date-fns"
+import type { Student } from "@/lib/mock-data"
 
-function AttendanceTable({ records }: { records: AttendanceRecord[] }) {
+type EnrichedAttendanceRecord = {
+  id: string
+  studentName: string
+  studentId: string
+  status: "Present" | "Absent"
+  timeIn: string | null
+}
+
+function AttendanceTable({ records }: { records: EnrichedAttendanceRecord[] }) {
+  if (records.length === 0) {
+    return (
+      <div className="text-center text-muted-foreground p-8">
+        No records to display.
+      </div>
+    );
+  }
+
   return (
     <Table>
       <TableHeader>
@@ -27,7 +50,6 @@ function AttendanceTable({ records }: { records: AttendanceRecord[] }) {
           <TableHead>Student ID</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Time In</TableHead>
-          <TableHead>Time Out</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -44,7 +66,6 @@ function AttendanceTable({ records }: { records: AttendanceRecord[] }) {
               </Badge>
             </TableCell>
             <TableCell>{record.timeIn || "---"}</TableCell>
-            <TableCell>{record.timeOut || "---"}</TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -52,11 +73,90 @@ function AttendanceTable({ records }: { records: AttendanceRecord[] }) {
   )
 }
 
-
 export default function FacultyDashboardPage() {
-  const todayAttendance = mockAttendance.filter(rec => rec.date === new Date().toISOString().split('T')[0]);
-  const presentStudents = todayAttendance.filter(r => r.status === 'Present');
-  const absentStudents = todayAttendance.filter(r => r.status === 'Absent');
+  const [students, setStudents] = useState<Student[]>([]);
+  const [attendance, setAttendance] = useState<EnrichedAttendanceRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        // 1. Fetch all students
+        const studentsSnapshot = await getDocs(collection(db, "students"));
+        const studentsList = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        setStudents(studentsList);
+
+        // 2. Fetch today's attendance from rfid_history
+        const todayStart = format(startOfDay(new Date()), "yyyy-MM-dd HH:mm:ss");
+        const todayEnd = format(endOfDay(new Date()), "yyyy-MM-dd HH:mm:ss");
+
+        const historyQuery = query(
+          collection(db, "rfid_history"),
+          where("time", ">=", todayStart),
+          where("time", "<=", todayEnd)
+        );
+        const historySnapshot = await getDocs(historyQuery);
+        
+        const todaysScans = new Map<string, { time: string, docId: string }>();
+        historySnapshot.forEach(doc => {
+          const data = doc.data();
+          const rfid = data.uid.toUpperCase();
+          // Keep the earliest scan of the day for "Time In"
+          if (!todaysScans.has(rfid)) {
+            todaysScans.set(rfid, { time: data.time, docId: doc.id });
+          }
+        });
+
+        // 3. Create enriched attendance records
+        const attendanceList: EnrichedAttendanceRecord[] = studentsList.map(student => {
+          const studentRfid = student.rfid?.toUpperCase();
+          const scan = studentRfid ? todaysScans.get(studentRfid) : undefined;
+
+          if (scan) {
+            return {
+              id: student.id,
+              studentId: student.id,
+              studentName: `${student.firstName} ${student.lastName}`,
+              status: "Present",
+              timeIn: format(new Date(scan.time), "p"),
+            };
+          } else {
+            return {
+              id: student.id,
+              studentId: student.id,
+              studentName: `${student.firstName} ${student.lastName}`,
+              status: "Absent",
+              timeIn: null,
+            };
+          }
+        });
+        
+        setAttendance(attendanceList);
+
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+        // Add toast notification for error
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  const presentStudents = attendance.filter(r => r.status === 'Present');
+  const absentStudents = attendance.filter(r => r.status === 'Absent');
+
+  if (isLoading) {
+      return (
+          <DashboardLayout role="faculty">
+              <div className="flex justify-center items-center h-96">
+                  <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              </div>
+          </DashboardLayout>
+      );
+  }
 
   return (
     <DashboardLayout role="faculty">
@@ -65,7 +165,7 @@ export default function FacultyDashboardPage() {
           <Card>
             <CardHeader>
               <CardDescription>Total Students</CardDescription>
-              <CardTitle>{mockStudents.length}</CardTitle>
+              <CardTitle>{students.length}</CardTitle>
             </CardHeader>
           </Card>
           <Card>
@@ -96,7 +196,7 @@ export default function FacultyDashboardPage() {
                 <TabsTrigger value="absent">Absent</TabsTrigger>
               </TabsList>
               <TabsContent value="today" className="mt-4">
-                <AttendanceTable records={todayAttendance} />
+                <AttendanceTable records={attendance} />
               </TabsContent>
               <TabsContent value="present" className="mt-4">
                 <AttendanceTable records={presentStudents} />
