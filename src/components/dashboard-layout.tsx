@@ -27,6 +27,7 @@ import {
   Loader2,
   ChevronLeft,
   MonitorSmartphone,
+  CalendarCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
@@ -56,7 +57,7 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
   ],
   faculty: [
     { href: "/faculty/dashboard", label: "Dashboard", icon: Home },
-    { href: "/faculty/manage-sections", label: "Manage Sections", icon: ClipboardList },
+    { href: "/faculty/manage-sections", label: "My Sections", icon: ClipboardList },
     { href: "/faculty/students", label: "Students", icon: BookUser },
   ],
   admin: [
@@ -150,18 +151,25 @@ function PageHeaderTitle() {
     const router = useRouter();
 
     const isStudentProfile = pathname.startsWith('/admin/student/');
-    const defaultTitle = pathname.split("/").pop()?.replace(/-/g, " ") || "";
+    const isFacultySectionAttendance = pathname.startsWith('/faculty/sections/');
+    
+    let title = pathname.split("/").pop()?.replace(/-/g, " ") || "";
+    if (isStudentProfile) title = "Student Profile";
+    if (isFacultySectionAttendance) title = "Section Attendance";
+
+
+    const canGoBack = isStudentProfile || isFacultySectionAttendance;
 
     return (
         <div className="flex items-center gap-2">
-        {isStudentProfile && (
+        {canGoBack && (
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => router.back()}>
                 <ChevronLeft className="h-4 w-4" />
                 <span className="sr-only">Back</span>
             </Button>
         )}
          <h1 className="text-xl font-semibold font-headline capitalize">
-            {isStudentProfile ? "Student Profile" : defaultTitle}
+            {title}
         </h1>
         </div>
     )
@@ -200,6 +208,19 @@ export function DashboardLayout({
     );
   }
 
+  const currentNavItems = navItems[role];
+  if (role === 'faculty') {
+      const sectionAttendanceItem = { href: "/faculty/sections", label: "Section Attendance", icon: CalendarCheck };
+      // A simple way to avoid duplicate items if this logic runs multiple times
+      if (!currentNavItems.find(item => item.href.startsWith('/faculty/sections'))) {
+          const manageIndex = currentNavItems.findIndex(item => item.href === '/faculty/manage-sections');
+          if (manageIndex !== -1) {
+              currentNavItems.splice(manageIndex + 1, 0, sectionAttendanceItem);
+          }
+      }
+  }
+
+
   return (
     <SidebarProvider>
       <Sidebar>
@@ -211,11 +232,11 @@ export function DashboardLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {navItems[role].map((item) => (
+            {currentNavItems.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   asChild
-                  isActive={pathname === item.href}
+                  isActive={pathname.startsWith(item.href)}
                   tooltip={item.label}
                 >
                   <Link href={item.href}>
