@@ -58,7 +58,6 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
   faculty: [
     { href: "/faculty/dashboard", label: "Dashboard", icon: Home },
     { href: "/faculty/manage-sections", label: "My Sections", icon: ClipboardList },
-    { href: "/faculty/students", label: "Students", icon: BookUser },
   ],
   admin: [
     { href: "/admin/dashboard", label: "Dashboard", icon: Home },
@@ -85,6 +84,13 @@ function UserNav({ role }: { role: UserRole }) {
     return () => unsubscribe();
   }, []);
 
+  const getInitial = () => {
+    if (user?.email) {
+      return user.email.charAt(0).toUpperCase();
+    }
+    return role.charAt(0).toUpperCase();
+  }
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -101,13 +107,6 @@ function UserNav({ role }: { role: UserRole }) {
       });
     }
   };
-
-  const getInitial = () => {
-    if (user?.email) {
-      return user.email.charAt(0).toUpperCase();
-    }
-    return role.charAt(0).toUpperCase();
-  }
 
   return (
     <DropdownMenu>
@@ -209,17 +208,6 @@ export function DashboardLayout({
   }
 
   const currentNavItems = navItems[role];
-  if (role === 'faculty') {
-      const sectionAttendanceItem = { href: "/faculty/sections", label: "Section Attendance", icon: CalendarCheck };
-      // A simple way to avoid duplicate items if this logic runs multiple times
-      if (!currentNavItems.find(item => item.href.startsWith('/faculty/sections'))) {
-          const manageIndex = currentNavItems.findIndex(item => item.href === '/faculty/manage-sections');
-          if (manageIndex !== -1) {
-              currentNavItems.splice(manageIndex + 1, 0, sectionAttendanceItem);
-          }
-      }
-  }
-
 
   return (
     <SidebarProvider>
