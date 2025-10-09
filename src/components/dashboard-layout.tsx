@@ -19,7 +19,6 @@ import {
   CheckCircle,
   LogOut,
   Settings,
-  UserPlus,
   Users,
   ClipboardList,
   History,
@@ -27,7 +26,6 @@ import {
   Loader2,
   ChevronLeft,
   MonitorSmartphone,
-  CalendarCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
@@ -63,7 +61,6 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
     { href: "/admin/dashboard", label: "Dashboard", icon: Home },
     { href: "/admin/manage-faculty", label: "Manage Faculty", icon: Users },
     { href: "/admin/manage-students", label: "Manage Students", icon: BookUser },
-    { href: "/admin/create-faculty", label: "Create Faculty", icon: UserPlus },
     { href: "/admin/manage-sections", label: "Manage Sections", icon: ClipboardList },
     { href: "/admin/manage-scanners", label: "Manage Scanners", icon: MonitorSmartphone },
     { href: "/admin/attendance", label: "Attendance Logs", icon: History },
