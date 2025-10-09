@@ -159,8 +159,8 @@ export default function FacultyManageSectionsPage() {
                     <TableHeader>
                         <TableRow>
                         <TableHead>Section Name</TableHead>
-                        <TableHead>Adviser</TableHead>
-                        <TableHead>Handled Subject(s)</TableHead>
+                        <TableHead>Section Adviser</TableHead>
+                        <TableHead>Your Handled Subject(s)</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
