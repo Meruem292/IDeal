@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card"
 import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
-import { Loader2, AlertCircle, CalendarClock, BookOpen } from "lucide-react"
+import { Loader2, AlertCircle, CalendarClock, BookOpen, CheckCircle, XCircle } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore"
 import type { Student } from "@/lib/mock-data"
@@ -26,15 +26,19 @@ type RawScan = {
     sectionId?: string;
 };
 
-type ScheduleInfo = {
+type Schedule = {
+    id: string;
     subject: string;
     startTime: string;
     endTime: string;
 }
 
 type DailyAttendance = {
-    time: string;
     subject: string;
+    startTime: string;
+    endTime: string;
+    status: 'Present' | 'Absent';
+    scanTime: string | null;
 }
 
 const parseScanDate = (time: string): Date | null => {
@@ -52,7 +56,7 @@ export default function StudentProfilePage() {
 
     const [student, setStudent] = useState<Student | null>(null);
     const [allScans, setAllScans] = useState<RawScan[]>([]);
-    const [scheduleMap, setScheduleMap] = useState<Map<string, ScheduleInfo>>(new Map());
+    const [sectionSchedule, setSectionSchedule] = useState<Schedule[]>([]);
     
     const [selectedDate, setSelectedDate] = useState<Date | undefined>();
     const [isLoading, setIsLoading] = useState(true);
@@ -79,23 +83,15 @@ export default function StudentProfilePage() {
                 const studentData = studentDoc.data() as Student;
                 setStudent(studentData);
 
-                // 2. Fetch all schedules to create a lookup map
-                const tempScheduleMap = new Map<string, ScheduleInfo>();
-                const sectionsSnapshot = await getDocs(collection(db, "sections"));
-                for (const sectionDoc of sectionsSnapshot.docs) {
-                    const schedulesSnapshot = await getDocs(collection(db, `sections/${sectionDoc.id}/schedules`));
-                    schedulesSnapshot.forEach(scheduleDoc => {
-                        const scheduleData = scheduleDoc.data();
-                        tempScheduleMap.set(scheduleDoc.id, {
-                            subject: scheduleData.subject,
-                            startTime: scheduleData.startTime,
-                            endTime: scheduleData.endTime
-                        });
-                    });
+                // 2. Fetch the student's section schedule if they have one
+                if (studentData.sectionId) {
+                    const scheduleQuery = query(collection(db, `sections/${studentData.sectionId}/schedules`));
+                    const scheduleSnapshot = await getDocs(scheduleQuery);
+                    const scheduleList = scheduleSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule));
+                    setSectionSchedule(scheduleList.sort((a,b) => a.startTime.localeCompare(b.startTime)));
                 }
-                setScheduleMap(tempScheduleMap);
 
-                // 3. Fetch attendance data if RFID exists
+                // 3. Fetch all attendance data for the student if RFID exists
                 if (studentData.rfid) {
                     const studentRfid = studentData.rfid.toUpperCase();
                     const historyQuery = query(
@@ -130,19 +126,27 @@ export default function StudentProfilePage() {
     }, [allScans]);
 
     const dailyAttendanceLog = useMemo((): DailyAttendance[] => {
-        if (!selectedDate || allScans.length === 0) return [];
+        if (!selectedDate || sectionSchedule.length === 0) return [];
         
-        return allScans
-            .filter(scan => {
-                const scanDate = parseScanDate(scan.time);
-                return scanDate && isSameDay(scanDate, selectedDate);
-            })
-            .map(scan => ({
-                time: format(parseScanDate(scan.time)!, 'p'),
-                subject: scan.classScheduleId ? scheduleMap.get(scan.classScheduleId)?.subject || 'Unknown Subject' : 'General Scan'
-            }))
-            .sort((a, b) => a.time.localeCompare(b.time));
-    }, [selectedDate, allScans, scheduleMap]);
+        // Find scans that happened on the selected day
+        const scansForDay = allScans.filter(scan => {
+            const scanDate = parseScanDate(scan.time);
+            return scanDate && isSameDay(scanDate, selectedDate);
+        });
+
+        // For each class in the student's schedule, check if there was a scan
+        return sectionSchedule.map(scheduleItem => {
+            const attendingScan = scansForDay.find(scan => scan.classScheduleId === scheduleItem.id);
+            
+            return {
+                subject: scheduleItem.subject,
+                startTime: scheduleItem.startTime,
+                endTime: scheduleItem.endTime,
+                status: attendingScan ? 'Present' : 'Absent',
+                scanTime: attendingScan ? format(parseScanDate(attendingScan.time)!, 'p') : null
+            };
+        });
+    }, [selectedDate, sectionSchedule, allScans]);
 
     if (isLoading) {
         return (
@@ -228,16 +232,16 @@ export default function StudentProfilePage() {
                                 className="p-0"
                                 modifiers={{ attended: attendedDays }}
                                 modifiersClassNames={{
-                                    attended: "bg-green-200/50 text-green-800 hover:bg-green-200/70 focus:bg-green-200/70",
+                                    attended: "bg-green-200/50 text-green-800 hover:bg-green-200/70 focus:bg-green-200/70 dark:bg-green-800/30 dark:text-green-300",
                                 }}
                             />
                         </CardContent>
                     </Card>
                      <Card>
                         <CardHeader>
-                            <CardTitle>Daily Scan Log</CardTitle>
+                            <CardTitle>Daily Attendance Log</CardTitle>
                             <CardDescription>
-                                {selectedDate ? `Scans for ${format(selectedDate, 'PPP')}` : "Select a day from the calendar to view its log."}
+                                {selectedDate ? `Attendance for ${format(selectedDate, 'PPP')}` : "Select a day from the calendar to view its log."}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -247,20 +251,26 @@ export default function StudentProfilePage() {
                                     <p>No day selected.</p>
                                 </div>
                             ) : dailyAttendanceLog.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
-                                    <p>No scans recorded for this day.</p>
+                                 <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+                                    <BookOpen className="h-10 w-10 mb-2"/>
+                                    <p>No schedule found for this student's section, or no scans recorded for this day.</p>
                                 </div>
                             ) : (
                                 <ul className="space-y-2">
                                     {dailyAttendanceLog.map((log, index) => (
-                                        <li key={index} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
+                                        <li key={index} className={`flex items-center justify-between p-3 rounded-md ${log.status === 'Present' ? 'bg-green-100/80 dark:bg-green-900/40' : 'bg-red-100/60 dark:bg-red-900/30'}`}>
                                             <div className="flex items-center gap-3">
-                                                <BookOpen className="h-5 w-5 text-primary"/>
+                                                 {log.status === 'Present' ? <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-500"/> : <XCircle className="h-5 w-5 text-red-600 dark:text-red-500"/>}
                                                 <div>
                                                      <p className="font-medium">{log.subject}</p>
+                                                     <p className="text-xs text-muted-foreground">{log.startTime} - {log.endTime}</p>
                                                 </div>
                                             </div>
-                                            <p className="font-mono text-sm text-muted-foreground">{log.time}</p>
+                                            {log.status === 'Present' ? (
+                                                 <p className="font-mono text-sm font-semibold text-green-700 dark:text-green-400">{log.scanTime}</p>
+                                            ) : (
+                                                <p className="text-sm font-semibold text-red-600 dark:text-red-500">Absent</p>
+                                            )}
                                         </li>
                                     ))}
                                 </ul>
@@ -273,3 +283,4 @@ export default function StudentProfilePage() {
     );
 }
 
+    
