@@ -15,6 +15,12 @@ service cloud.firestore {
     function isSelf(userId) {
       return isAuth() && request.auth.uid == userId;
     }
+    
+    // --- Collection Group Rules ---
+    // This rule allows faculty to query across all 'schedules' subcollections.
+    match /{path=**}/schedules/{scheduleId} {
+      allow get, list: if isRole("admins") || isRole("faculty");
+    }
 
     // --- Admins Collection ---
     match /admins/{userId} {
@@ -52,7 +58,7 @@ service cloud.firestore {
       allow create, update, delete: if isRole("admins");
 
       match /schedules/{scheduleId} {
-        // ESP32 unauthenticated read support
+        // This is for direct access, collection group rule is separate
         allow get, list: if true; 
         allow create, update, delete: if isRole("admins");
       }
