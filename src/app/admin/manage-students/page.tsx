@@ -170,11 +170,12 @@ export default function ManageStudentsPage() {
   
   const filteredStudents = useMemo(() => {
     if (!mainSearchTerm) return students;
+    const lowercasedTerm = mainSearchTerm.toLowerCase();
     return students.filter(student =>
       `${student.firstName} ${student.lastName}`
         .toLowerCase()
-        .includes(mainSearchTerm.toLowerCase()) ||
-      student.id.toLowerCase().includes(mainSearchTerm.toLowerCase())
+        .includes(lowercasedTerm) ||
+      (student.rfid && student.rfid.toLowerCase().includes(lowercasedTerm))
     );
   }, [students, mainSearchTerm]);
 
@@ -258,7 +259,7 @@ export default function ManageStudentsPage() {
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
-                            placeholder="Search by student name or ID..."
+                            placeholder="Search by student name or RFID..."
                             value={mainSearchTerm}
                             onChange={(e) => setMainSearchTerm(e.target.value)}
                             className="pl-10"
@@ -464,5 +465,7 @@ export default function ManageStudentsPage() {
     </DashboardLayout>
   )
 }
+
+    
 
     
