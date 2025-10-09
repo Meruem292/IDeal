@@ -12,11 +12,11 @@ import {
 } from "@/components/ui/card"
 import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
-import { Loader2, AlertCircle, CalendarClock, BookOpen, CheckCircle, XCircle } from "lucide-react"
+import { Loader2, AlertCircle, CalendarClock, BookOpen, CheckCircle, XCircle, Clock } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore"
 import type { Student } from "@/lib/mock-data"
-import { format, isSameDay } from "date-fns"
+import { format, isSameDay, parse, set } from "date-fns"
 
 type RawScan = {
     id: string;
@@ -37,7 +37,7 @@ type DailyAttendance = {
     subject: string;
     startTime: string;
     endTime: string;
-    status: 'Present' | 'Absent';
+    status: 'Present' | 'Absent' | 'Late';
     scanTime: string | null;
 }
 
@@ -49,6 +49,8 @@ const parseScanDate = (time: string): Date | null => {
         return null;
     }
 };
+
+const LATE_GRACE_PERIOD_MINUTES = 15;
 
 export default function StudentProfilePage() {
     const params = useParams();
@@ -128,22 +130,37 @@ export default function StudentProfilePage() {
     const dailyAttendanceLog = useMemo((): DailyAttendance[] => {
         if (!selectedDate || sectionSchedule.length === 0) return [];
         
-        // Find scans that happened on the selected day
         const scansForDay = allScans.filter(scan => {
             const scanDate = parseScanDate(scan.time);
             return scanDate && isSameDay(scanDate, selectedDate);
         });
 
-        // For each class in the student's schedule, check if there was a scan
         return sectionSchedule.map(scheduleItem => {
             const attendingScan = scansForDay.find(scan => scan.classScheduleId === scheduleItem.id);
+            
+            let status: DailyAttendance['status'] = 'Absent';
+            let scanTime: string | null = null;
+
+            if (attendingScan) {
+                const scanDate = parseScanDate(attendingScan.time)!;
+                scanTime = format(scanDate, 'p');
+
+                const scheduleStartTime = parse(scheduleItem.startTime, 'HH:mm', selectedDate);
+                const lateTime = new Date(scheduleStartTime.getTime() + LATE_GRACE_PERIOD_MINUTES * 60000);
+
+                if (scanDate > lateTime) {
+                    status = 'Late';
+                } else {
+                    status = 'Present';
+                }
+            }
             
             return {
                 subject: scheduleItem.subject,
                 startTime: scheduleItem.startTime,
                 endTime: scheduleItem.endTime,
-                status: attendingScan ? 'Present' : 'Absent',
-                scanTime: attendingScan ? format(parseScanDate(attendingScan.time)!, 'p') : null
+                status,
+                scanTime,
             };
         });
     }, [selectedDate, sectionSchedule, allScans]);
@@ -172,6 +189,30 @@ export default function StudentProfilePage() {
     
     if (!student) {
         return <DashboardLayout role="admin"><p>Student not found.</p></DashboardLayout>;
+    }
+
+    const attendanceStatusMap = {
+        Present: {
+            icon: <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-500" />,
+            bgColor: 'bg-green-100/80 dark:bg-green-900/40',
+            timeColor: 'text-green-700 dark:text-green-400',
+            labelColor: 'text-green-600 dark:text-green-500',
+            label: 'Present',
+        },
+        Late: {
+            icon: <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-500" />,
+            bgColor: 'bg-yellow-100/80 dark:bg-yellow-900/40',
+            timeColor: 'text-yellow-700 dark:text-yellow-400',
+            labelColor: 'text-yellow-600 dark:text-yellow-500',
+            label: 'Late',
+        },
+        Absent: {
+            icon: <XCircle className="h-5 w-5 text-red-600 dark:text-red-500" />,
+            bgColor: 'bg-red-100/60 dark:bg-red-900/30',
+            timeColor: '',
+            labelColor: 'text-red-600 dark:text-red-500',
+            label: 'Absent',
+        },
     }
 
     return (
@@ -257,22 +298,25 @@ export default function StudentProfilePage() {
                                 </div>
                             ) : (
                                 <ul className="space-y-2">
-                                    {dailyAttendanceLog.map((log, index) => (
-                                        <li key={index} className={`flex items-center justify-between p-3 rounded-md ${log.status === 'Present' ? 'bg-green-100/80 dark:bg-green-900/40' : 'bg-red-100/60 dark:bg-red-900/30'}`}>
-                                            <div className="flex items-center gap-3">
-                                                 {log.status === 'Present' ? <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-500"/> : <XCircle className="h-5 w-5 text-red-600 dark:text-red-500"/>}
-                                                <div>
-                                                     <p className="font-medium">{log.subject}</p>
-                                                     <p className="text-xs text-muted-foreground">{log.startTime} - {log.endTime}</p>
+                                    {dailyAttendanceLog.map((log, index) => {
+                                        const statusInfo = attendanceStatusMap[log.status];
+                                        return (
+                                            <li key={index} className={`flex items-center justify-between p-3 rounded-md ${statusInfo.bgColor}`}>
+                                                <div className="flex items-center gap-3">
+                                                    {statusInfo.icon}
+                                                    <div>
+                                                        <p className="font-medium">{log.subject}</p>
+                                                        <p className="text-xs text-muted-foreground">{log.startTime} - {log.endTime}</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            {log.status === 'Present' ? (
-                                                 <p className="font-mono text-sm font-semibold text-green-700 dark:text-green-400">{log.scanTime}</p>
-                                            ) : (
-                                                <p className="text-sm font-semibold text-red-600 dark:text-red-500">Absent</p>
-                                            )}
-                                        </li>
-                                    ))}
+                                                {log.scanTime ? (
+                                                    <p className={`font-mono text-sm font-semibold ${statusInfo.timeColor}`}>{log.scanTime}</p>
+                                                ) : (
+                                                    <p className={`text-sm font-semibold ${statusInfo.labelColor}`}>{statusInfo.label}</p>
+                                                )}
+                                            </li>
+                                        )
+                                    })}
                                 </ul>
                             )}
                         </CardContent>
