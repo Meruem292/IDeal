@@ -1,6 +1,6 @@
 
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import {
@@ -12,17 +12,30 @@ import {
 } from "@/components/ui/card"
 import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
-import { Loader2, AlertCircle } from "lucide-react"
+import { Loader2, AlertCircle, CalendarClock, BookOpen } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore"
 import type { Student } from "@/lib/mock-data"
-import { format } from "date-fns"
+import { format, isSameDay } from "date-fns"
 
 type RawScan = {
     id: string;
     time: string; // The date string from Firestore
     uid: string;
+    classScheduleId?: string;
+    sectionId?: string;
 };
+
+type ScheduleInfo = {
+    subject: string;
+    startTime: string;
+    endTime: string;
+}
+
+type DailyAttendance = {
+    time: string;
+    subject: string;
+}
 
 const parseScanDate = (time: string): Date | null => {
     try {
@@ -38,7 +51,10 @@ export default function StudentProfilePage() {
     const studentId = params.id as string;
 
     const [student, setStudent] = useState<Student | null>(null);
-    const [attendedDays, setAttendedDays] = useState<Date[]>([]);
+    const [allScans, setAllScans] = useState<RawScan[]>([]);
+    const [scheduleMap, setScheduleMap] = useState<Map<string, ScheduleInfo>>(new Map());
+    
+    const [selectedDate, setSelectedDate] = useState<Date | undefined>();
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -63,7 +79,23 @@ export default function StudentProfilePage() {
                 const studentData = studentDoc.data() as Student;
                 setStudent(studentData);
 
-                // 2. Fetch attendance data if RFID exists
+                // 2. Fetch all schedules to create a lookup map
+                const tempScheduleMap = new Map<string, ScheduleInfo>();
+                const sectionsSnapshot = await getDocs(collection(db, "sections"));
+                for (const sectionDoc of sectionsSnapshot.docs) {
+                    const schedulesSnapshot = await getDocs(collection(db, `sections/${sectionDoc.id}/schedules`));
+                    schedulesSnapshot.forEach(scheduleDoc => {
+                        const scheduleData = scheduleDoc.data();
+                        tempScheduleMap.set(scheduleDoc.id, {
+                            subject: scheduleData.subject,
+                            startTime: scheduleData.startTime,
+                            endTime: scheduleData.endTime
+                        });
+                    });
+                }
+                setScheduleMap(tempScheduleMap);
+
+                // 3. Fetch attendance data if RFID exists
                 if (studentData.rfid) {
                     const studentRfid = studentData.rfid.toUpperCase();
                     const historyQuery = query(
@@ -72,18 +104,8 @@ export default function StudentProfilePage() {
                     );
                     const historySnapshot = await getDocs(historyQuery);
                     
-                    const uniqueDays = new Set<string>();
-                    historySnapshot.forEach((doc) => {
-                        const data = doc.data() as RawScan;
-                        const scanDate = parseScanDate(data.time);
-                        if (scanDate) {
-                            // Normalize to the start of the day to get unique days
-                            uniqueDays.add(format(scanDate, "yyyy-MM-dd"));
-                        }
-                    });
-                    
-                    const attendedDates = Array.from(uniqueDays).map(dayStr => new Date(dayStr));
-                    setAttendedDays(attendedDates);
+                    const scans = historySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RawScan));
+                    setAllScans(scans);
                 }
             } catch (err: any) {
                 console.error("Error fetching student data:", err);
@@ -95,6 +117,32 @@ export default function StudentProfilePage() {
 
         fetchData();
     }, [studentId]);
+
+    const attendedDays = useMemo(() => {
+        const uniqueDays = new Set<string>();
+        allScans.forEach(scan => {
+            const scanDate = parseScanDate(scan.time);
+            if (scanDate) {
+                uniqueDays.add(format(scanDate, "yyyy-MM-dd"));
+            }
+        });
+        return Array.from(uniqueDays).map(dayStr => new Date(dayStr + 'T00:00:00')); // Use T00:00:00 to avoid timezone issues
+    }, [allScans]);
+
+    const dailyAttendanceLog = useMemo((): DailyAttendance[] => {
+        if (!selectedDate || allScans.length === 0) return [];
+        
+        return allScans
+            .filter(scan => {
+                const scanDate = parseScanDate(scan.time);
+                return scanDate && isSameDay(scanDate, selectedDate);
+            })
+            .map(scan => ({
+                time: format(parseScanDate(scan.time)!, 'p'),
+                subject: scan.classScheduleId ? scheduleMap.get(scan.classScheduleId)?.subject || 'Unknown Subject' : 'General Scan'
+            }))
+            .sort((a, b) => a.time.localeCompare(b.time));
+    }, [selectedDate, allScans, scheduleMap]);
 
     if (isLoading) {
         return (
@@ -124,8 +172,8 @@ export default function StudentProfilePage() {
 
     return (
         <DashboardLayout role="admin">
-            <div className="grid gap-6 lg:grid-cols-3">
-                <Card className="lg:col-span-1">
+            <div className="grid gap-6 lg:grid-cols-5">
+                <Card className="lg:col-span-2">
                     <CardHeader>
                         <CardTitle>{`${student.firstName} ${student.lastName}`}</CardTitle>
                         <CardDescription>Student Profile</CardDescription>
@@ -163,25 +211,63 @@ export default function StudentProfilePage() {
                     </CardContent>
                 </Card>
 
-                <Card className="lg:col-span-2">
-                    <CardHeader>
-                        <CardTitle>Attendance Calendar</CardTitle>
-                        <CardDescription>
-                            Days with a green background indicate at least one scan was recorded.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex justify-center">
-                        <Calendar
-                            mode="multiple"
-                            selected={attendedDays}
-                            defaultMonth={new Date()}
-                            className="p-0"
-                            classNames={{
-                                day_selected: "bg-green-200/50 text-green-800 hover:bg-green-200/70 focus:bg-green-200/70",
-                            }}
-                        />
-                    </CardContent>
-                </Card>
+                <div className="lg:col-span-3 grid grid-cols-1 gap-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Attendance Calendar</CardTitle>
+                            <CardDescription>
+                                Click a highlighted day to see detailed subject attendance.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex justify-center">
+                            <Calendar
+                                mode="single"
+                                selected={selectedDate}
+                                onSelect={setSelectedDate}
+                                defaultMonth={new Date()}
+                                className="p-0"
+                                modifiers={{ attended: attendedDays }}
+                                modifiersClassNames={{
+                                    attended: "bg-green-200/50 text-green-800 hover:bg-green-200/70 focus:bg-green-200/70",
+                                }}
+                            />
+                        </CardContent>
+                    </Card>
+                     <Card>
+                        <CardHeader>
+                            <CardTitle>Daily Scan Log</CardTitle>
+                            <CardDescription>
+                                {selectedDate ? `Scans for ${format(selectedDate, 'PPP')}` : "Select a day from the calendar to view its log."}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {!selectedDate ? (
+                                <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+                                    <CalendarClock className="h-10 w-10 mb-2"/>
+                                    <p>No day selected.</p>
+                                </div>
+                            ) : dailyAttendanceLog.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+                                    <p>No scans recorded for this day.</p>
+                                </div>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {dailyAttendanceLog.map((log, index) => (
+                                        <li key={index} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
+                                            <div className="flex items-center gap-3">
+                                                <BookOpen className="h-5 w-5 text-primary"/>
+                                                <div>
+                                                     <p className="font-medium">{log.subject}</p>
+                                                </div>
+                                            </div>
+                                            <p className="font-mono text-sm text-muted-foreground">{log.time}</p>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </DashboardLayout>
     );
