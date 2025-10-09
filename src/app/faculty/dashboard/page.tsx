@@ -20,10 +20,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Loader2 } from "lucide-react"
-import { db } from "@/lib/firebase"
+import { useFirestore } from "@/firebase"
 import { collection, getDocs, query, where } from "firebase/firestore"
 import { format, startOfDay, endOfDay } from "date-fns"
 import type { Student } from "@/lib/mock-data"
+import { errorEmitter } from "@/firebase/error-emitter"
+import { FirestorePermissionError } from "@/firebase/errors"
 
 type EnrichedAttendanceRecord = {
   id: string
@@ -77,73 +79,93 @@ export default function FacultyDashboardPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<EnrichedAttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const db = useFirestore();
 
   useEffect(() => {
+    if (!db) return;
+
     const fetchDashboardData = async () => {
       setIsLoading(true);
-      try {
-        // 1. Fetch all students
-        const studentsSnapshot = await getDocs(collection(db, "students"));
-        const studentsList = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
-        setStudents(studentsList);
-
-        // 2. Fetch today's attendance from rfid_history
-        const todayStart = format(startOfDay(new Date()), "yyyy-MM-dd HH:mm:ss");
-        const todayEnd = format(endOfDay(new Date()), "yyyy-MM-dd HH:mm:ss");
-
-        const historyQuery = query(
-          collection(db, "rfid_history"),
-          where("time", ">=", todayStart),
-          where("time", "<=", todayEnd)
-        );
-        const historySnapshot = await getDocs(historyQuery);
-        
-        const todaysScans = new Map<string, { time: string, docId: string }>();
-        historySnapshot.forEach(doc => {
-          const data = doc.data();
-          const rfid = data.uid.toUpperCase();
-          // Keep the earliest scan of the day for "Time In"
-          if (!todaysScans.has(rfid)) {
-            todaysScans.set(rfid, { time: data.time, docId: doc.id });
-          }
+      
+      const studentsRef = collection(db, "students");
+      const studentsSnapshot = await getDocs(studentsRef).catch(async (serverError) => {
+        const permissionError = new FirestorePermissionError({
+          path: studentsRef.path,
+          operation: 'list',
         });
+        errorEmitter.emit('permission-error', permissionError);
+        return null;
+      });
 
-        // 3. Create enriched attendance records
-        const attendanceList: EnrichedAttendanceRecord[] = studentsList.map(student => {
-          const studentRfid = student.rfid?.toUpperCase();
-          const scan = studentRfid ? todaysScans.get(studentRfid) : undefined;
-
-          if (scan) {
-            return {
-              id: student.id,
-              studentId: student.id,
-              studentName: `${student.firstName} ${student.lastName}`,
-              status: "Present",
-              timeIn: format(new Date(scan.time), "p"),
-            };
-          } else {
-            return {
-              id: student.id,
-              studentId: student.id,
-              studentName: `${student.firstName} ${student.lastName}`,
-              status: "Absent",
-              timeIn: null,
-            };
-          }
-        });
-        
-        setAttendance(attendanceList);
-
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-        // Add toast notification for error
-      } finally {
+      if (!studentsSnapshot) {
         setIsLoading(false);
+        return;
       }
+      
+      const studentsList = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+      setStudents(studentsList);
+
+      const todayStart = format(startOfDay(new Date()), "yyyy-MM-dd HH:mm:ss");
+      const todayEnd = format(endOfDay(new Date()), "yyyy-MM-dd HH:mm:ss");
+
+      const historyQuery = query(
+        collection(db, "rfid_history"),
+        where("time", ">=", todayStart),
+        where("time", "<=", todayEnd)
+      );
+
+      const historySnapshot = await getDocs(historyQuery).catch(async (serverError) => {
+        const permissionError = new FirestorePermissionError({
+            path: 'rfid_history',
+            operation: 'list'
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        return null;
+      });
+
+      if(!historySnapshot) {
+        setIsLoading(false);
+        return;
+      }
+
+      const todaysScans = new Map<string, { time: string, docId: string }>();
+      historySnapshot.forEach(doc => {
+        const data = doc.data();
+        const rfid = data.uid.toUpperCase();
+        if (!todaysScans.has(rfid)) {
+          todaysScans.set(rfid, { time: data.time, docId: doc.id });
+        }
+      });
+
+      const attendanceList: EnrichedAttendanceRecord[] = studentsList.map(student => {
+        const studentRfid = student.rfid?.toUpperCase();
+        const scan = studentRfid ? todaysScans.get(studentRfid) : undefined;
+
+        if (scan) {
+          return {
+            id: student.id,
+            studentId: student.id,
+            studentName: `${student.firstName} ${student.lastName}`,
+            status: "Present",
+            timeIn: format(new Date(scan.time), "p"),
+          };
+        } else {
+          return {
+            id: student.id,
+            studentId: student.id,
+            studentName: `${student.firstName} ${student.lastName}`,
+            status: "Absent",
+            timeIn: null,
+          };
+        }
+      });
+      
+      setAttendance(attendanceList);
+      setIsLoading(false);
     };
 
     fetchDashboardData();
-  }, []);
+  }, [db]);
 
   const presentStudents = attendance.filter(r => r.status === 'Present');
   const absentStudents = attendance.filter(r => r.status === 'Absent');

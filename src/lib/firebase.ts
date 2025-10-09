@@ -12,6 +12,8 @@ const firebaseConfig = {
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// The auth and db instances from here are now primarily for the server-side,
+// or for parts of the app not yet fully migrated to the provider pattern.
 const auth = getAuth(app);
 const db = getFirestore(app);
 
