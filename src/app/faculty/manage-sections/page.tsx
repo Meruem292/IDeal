@@ -28,6 +28,7 @@ type Section = {
   id: string
   name: string
   adviserName: string
+  handledSubjects: string
 }
 
 export default function FacultyManageSectionsPage() {
@@ -53,14 +54,36 @@ export default function FacultyManageSectionsPage() {
             // Find sections where the current faculty teaches a subject
             const taughtSchedulesQuery = query(collectionGroup(db, 'schedules'), where('facultyId', '==', currentUser.uid));
             const taughtSchedulesSnapshot = await getDocs(taughtSchedulesQuery);
-            const taughtSectionIds = new Set(taughtSchedulesSnapshot.docs.map(doc => doc.ref.parent.parent!.id));
+            
+            const taughtSectionIds = new Set<string>();
+            const subjectsBySection = new Map<string, string[]>();
+
+            taughtSchedulesSnapshot.forEach(doc => {
+                const sectionId = doc.ref.parent.parent!.id;
+                const subject = doc.data().subject;
+                taughtSectionIds.add(sectionId);
+                
+                if (!subjectsBySection.has(sectionId)) {
+                    subjectsBySection.set(sectionId, []);
+                }
+                subjectsBySection.get(sectionId)!.push(subject);
+            });
 
             // Fetch the full section documents for taught sections
             let taughtSections: Section[] = [];
             if (taughtSectionIds.size > 0) {
                  const taughtSectionsQuery = query(collection(db, "sections"), where("__name__", "in", Array.from(taughtSectionIds)));
                  const taughtSectionsDocs = await getDocs(taughtSectionsQuery);
-                 taughtSections = taughtSectionsDocs.docs.map(doc => ({ id: doc.id, ...doc.data() } as Section));
+                 taughtSections = taughtSectionsDocs.docs.map(doc => {
+                    const sectionData = doc.data();
+                    const subjects = subjectsBySection.get(doc.id) || [];
+                    return { 
+                        id: doc.id, 
+                        name: sectionData.name,
+                        adviserName: sectionData.adviserName,
+                        handledSubjects: subjects.join(', ')
+                    } as Section
+                 });
             }
            
             setHandledSections(taughtSections.sort((a,b) => a.name.localeCompare(b.name)));
@@ -137,6 +160,7 @@ export default function FacultyManageSectionsPage() {
                         <TableRow>
                         <TableHead>Section Name</TableHead>
                         <TableHead>Adviser</TableHead>
+                        <TableHead>Handled Subject(s)</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -145,6 +169,7 @@ export default function FacultyManageSectionsPage() {
                         <TableRow key={section.id}>
                             <TableCell className="font-medium">{section.name}</TableCell>
                             <TableCell>{section.adviserName}</TableCell>
+                            <TableCell className="text-muted-foreground">{section.handledSubjects}</TableCell>
                             <TableCell className="text-right">
                                 <Button asChild variant="outline" size="sm">
                                     <Link href={`/faculty/sections/${section.id}`}>
