@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { db, auth } from '@/lib/firebase'
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { Loader2, AlertCircle } from 'lucide-react'
@@ -39,6 +40,101 @@ type RawScan = { uid: string; time: string; classScheduleId: string }
 type AttendanceStatus = 'Present' | 'Late' | 'Absent'
 
 const LATE_GRACE_PERIOD_MINUTES = 15
+
+function AttendanceGrid({
+  students,
+  scans,
+  schedule,
+  daysInMonth
+}: {
+  students: Student[],
+  scans: RawScan[],
+  schedule: Schedule,
+  daysInMonth: Date[]
+}) {
+  
+  const attendanceData = useMemo(() => {
+    return students.map(student => {
+      const studentScans = scans.filter(s => s.uid.toUpperCase() === student.rfid?.toUpperCase())
+      const attendanceByDate = new Map<string, AttendanceStatus>()
+
+      daysInMonth.forEach(day => {
+        const dayStr = format(day, 'yyyy-MM-dd')
+        const scanForDay = studentScans.find(s => s.time.startsWith(dayStr) && s.classScheduleId === schedule.id)
+
+        let status: AttendanceStatus = 'Absent';
+
+        if (scanForDay) {
+          const scanDate = new Date(scanForDay.time.replace(' ', 'T'));
+          const scheduleStartTime = parse(schedule.startTime, 'HH:mm', day);
+          const lateTime = new Date(scheduleStartTime.getTime() + LATE_GRACE_PERIOD_MINUTES * 60000);
+          if (scanDate > lateTime) {
+            status = 'Late';
+          } else {
+            status = 'Present';
+          }
+        }
+        attendanceByDate.set(dayStr, status);
+      });
+
+      return {
+        studentId: student.id,
+        studentName: `${student.lastName}, ${student.firstName}`,
+        attendance: attendanceByDate,
+      }
+    })
+  }, [students, scans, schedule, daysInMonth])
+  
+  const getCellClass = (status: AttendanceStatus | undefined) => {
+    switch (status) {
+      case 'Present': return 'bg-green-100 dark:bg-green-900/50'
+      case 'Late': return 'bg-yellow-100 dark:bg-yellow-900/50'
+      case 'Absent': return 'bg-red-100 dark:bg-red-900/50'
+      default: return 'bg-muted/20'
+    }
+  }
+
+  return (
+    <div className="overflow-x-auto border rounded-lg">
+       <Table className="min-w-full">
+          <TableHeader>
+              <TableRow className="hover:bg-transparent">
+              <TableHead className="sticky left-0 bg-background z-10 w-48 font-semibold">Student Name</TableHead>
+              {daysInMonth.map(day => (
+                  <TableHead key={day.toString()} className="text-center min-w-[60px]">
+                      <div className="flex flex-col items-center">
+                          <span className="text-xs">{format(day, 'EEE')}</span>
+                          <span className="font-bold text-lg">{format(day, 'd')}</span>
+                      </div>
+                  </TableHead>
+              ))}
+              </TableRow>
+          </TableHeader>
+          <TableBody>
+              {attendanceData.map(({ studentId, studentName, attendance }) => (
+              <TableRow key={studentId}>
+                  <TableCell className="sticky left-0 bg-background z-10 font-medium whitespace-nowrap">{studentName}</TableCell>
+                  {daysInMonth.map(day => {
+                  const dayStr = format(day, 'yyyy-MM-dd')
+                  const status = attendance.get(dayStr)
+                  return (
+                      <TableCell key={dayStr} className={cn("text-center p-0 h-16", getCellClass(status))}>
+                         {status && (
+                             <div className="w-full h-full flex items-center justify-center font-semibold text-xs">
+                              {/* We can put content here if needed later */}
+                             </div>
+                         )}
+                      </TableCell>
+                  )
+                  })}
+              </TableRow>
+              ))}
+          </TableBody>
+      </Table>
+    </div>
+  )
+}
+
 
 export default function SectionAttendancePage() {
   const params = useParams()
@@ -108,69 +204,6 @@ export default function SectionAttendancePage() {
     return () => unsubscribe();
   }, [sectionId])
 
-  const attendanceData = useMemo(() => {
-    return students.map(student => {
-      const studentScans = scans.filter(s => s.uid.toUpperCase() === student.rfid?.toUpperCase())
-      
-      const attendanceByDate = new Map<string, AttendanceStatus>()
-
-      daysInMonth.forEach(day => {
-        const dayStr = format(day, 'yyyy-MM-dd')
-        // Only check against schedules handled by this faculty
-        if (facultySchedules.length === 0) {
-            attendanceByDate.set(dayStr, 'Absent')
-            return;
-        }
-
-        const scansForDay = studentScans.filter(s => s.time.startsWith(dayStr))
-        
-        let presentCount = 0
-        let lateCount = 0
-
-        facultySchedules.forEach(schedule => {
-            const attendingScan = scansForDay.find(s => s.classScheduleId === schedule.id)
-            if (attendingScan) {
-                 const scanDate = new Date(attendingScan.time.replace(' ', 'T'));
-                 const scheduleStartTime = parse(schedule.startTime, 'HH:mm', day);
-                 const lateTime = new Date(scheduleStartTime.getTime() + LATE_GRACE_PERIOD_MINUTES * 60000);
-                 if (scanDate > lateTime) {
-                    lateCount++;
-                 } else {
-                    presentCount++;
-                 }
-            }
-        })
-        
-        // If there are no scans for any of the faculty's subjects, mark as absent.
-        if (presentCount === 0 && lateCount === 0) {
-             attendanceByDate.set(dayStr, 'Absent')
-        // If there's at least one late scan, mark the day as late.
-        } else if (lateCount > 0) {
-            attendanceByDate.set(dayStr, 'Late')
-        // Otherwise, they were present for at least one subject on time.
-        } else {
-            attendanceByDate.set(dayStr, 'Present')
-        }
-      })
-
-      return {
-        studentId: student.id,
-        studentName: `${student.lastName}, ${student.firstName}`,
-        attendance: attendanceByDate,
-      }
-    })
-  }, [students, scans, facultySchedules, daysInMonth])
-
-
-  const getCellClass = (status: AttendanceStatus | undefined) => {
-    switch (status) {
-      case 'Present': return 'bg-green-100 dark:bg-green-900/50'
-      case 'Late': return 'bg-yellow-100 dark:bg-yellow-900/50'
-      case 'Absent': return 'bg-red-100 dark:bg-red-900/50'
-      default: return 'bg-muted/20'
-    }
-  }
-  
   if (isLoading) {
     return <DashboardLayout role="faculty"><div className="flex justify-center items-center h-96"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div></DashboardLayout>
   }
@@ -179,8 +212,7 @@ export default function SectionAttendancePage() {
     return <DashboardLayout role="faculty"><div className="flex flex-col items-center justify-center h-full rounded-lg border-2 border-dashed border-destructive/50 bg-destructive/10 text-destructive p-8 text-center"><AlertCircle className="h-10 w-10 mb-4" /><h2 className="text-xl font-semibold mb-2">Could Not Load Section</h2><p>{error}</p></div></DashboardLayout>
   }
   
-  const handledSubjects = facultySchedules.map(s => s.subject).join(', ');
-
+  const defaultTab = facultySchedules[0]?.id || "";
 
   return (
     <DashboardLayout role="faculty">
@@ -188,47 +220,34 @@ export default function SectionAttendancePage() {
         <CardHeader>
           <CardTitle>Attendance Sheet: {section?.name}</CardTitle>
           <CardDescription>
-            {`Viewing attendance for subject(s): ${handledSubjects || 'None'}. Month of ${format(currentMonth, 'MMMM yyyy')}`}
+            {`Viewing attendance for your handled subjects. Month of ${format(currentMonth, 'MMMM yyyy')}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto border rounded-lg">
-             <Table className="min-w-full">
-                <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                    <TableHead className="sticky left-0 bg-background z-10 w-48 font-semibold">Student Name</TableHead>
-                    {daysInMonth.map(day => (
-                        <TableHead key={day.toString()} className="text-center min-w-[60px]">
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs">{format(day, 'EEE')}</span>
-                                <span className="font-bold text-lg">{format(day, 'd')}</span>
-                            </div>
-                        </TableHead>
-                    ))}
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {attendanceData.map(({ studentId, studentName, attendance }) => (
-                    <TableRow key={studentId}>
-                        <TableCell className="sticky left-0 bg-background z-10 font-medium whitespace-nowrap">{studentName}</TableCell>
-                        {daysInMonth.map(day => {
-                        const dayStr = format(day, 'yyyy-MM-dd')
-                        const status = attendance.get(dayStr)
-                        return (
-                            <TableCell key={dayStr} className={cn("text-center p-0 h-16", getCellClass(status))}>
-                               {status && (
-                                   <div className="w-full h-full flex items-center justify-center font-semibold text-xs">
-                                    {/* We can put content here if needed later */}
-                                   </div>
-                               )}
-                            </TableCell>
-                        )
-                        })}
-                    </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-          </div>
+          {facultySchedules.length > 0 ? (
+            <Tabs defaultValue={defaultTab} className="w-full">
+              <TabsList>
+                {facultySchedules.map(schedule => (
+                  <TabsTrigger key={schedule.id} value={schedule.id}>
+                    {schedule.subject} ({schedule.startTime})
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {facultySchedules.map(schedule => (
+                <TabsContent key={schedule.id} value={schedule.id} className="mt-4">
+                  <AttendanceGrid 
+                    students={students}
+                    scans={scans}
+                    schedule={schedule}
+                    daysInMonth={daysInMonth}
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
+          ) : (
+             <div className="text-center text-muted-foreground p-8">You are not assigned to teach any subjects in this section.</div>
+          )}
+
            <div className="flex items-center gap-4 mt-4 p-2">
                 <h4 className="font-semibold text-sm">Legend:</h4>
                 <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-green-100 border"></div><span className="text-xs">Present</span></div>
@@ -240,3 +259,5 @@ export default function SectionAttendancePage() {
     </DashboardLayout>
   )
 }
+
+    
