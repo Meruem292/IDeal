@@ -27,14 +27,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { db } from '@/lib/firebase'
+import { db, auth } from '@/lib/firebase'
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { Loader2, AlertCircle } from 'lucide-react'
 import type { Student } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 
 type Section = { id: string; name: string }
-type Schedule = { id: string; subject: string; startTime: string; endTime: string }
+type Schedule = { id: string; subject: string; startTime: string; endTime: string, facultyId?: string }
 type RawScan = { uid: string; time: string; classScheduleId: string }
 type AttendanceStatus = 'Present' | 'Late' | 'Absent'
 
@@ -46,7 +46,7 @@ export default function SectionAttendancePage() {
 
   const [section, setSection] = useState<Section | null>(null)
   const [students, setStudents] = useState<Student[]>([])
-  const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [facultySchedules, setFacultySchedules] = useState<Schedule[]>([])
   const [scans, setScans] = useState<RawScan[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -60,44 +60,52 @@ export default function SectionAttendancePage() {
   useEffect(() => {
     if (!sectionId) return
 
-    const fetchData = async () => {
-      setIsLoading(true)
-      try {
-        // Fetch Section Details
-        const sectionDoc = await getDoc(doc(db, 'sections', sectionId))
-        if (!sectionDoc.exists()) throw new Error('Section not found')
-        setSection({ id: sectionDoc.id, ...sectionDoc.data() } as Section)
-
-        // Fetch Students in Section
-        const studentsQuery = query(collection(db, 'students'), where('sectionId', '==', sectionId))
-        const studentsSnapshot = await getDocs(studentsQuery)
-        const studentList = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student)).sort((a, b) => a.lastName.localeCompare(b.lastName))
-        setStudents(studentList)
-
-        // Fetch Section's Schedule
-        const schedulesSnapshot = await getDocs(collection(db, `sections/${sectionId}/schedules`))
-        const scheduleList = schedulesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule))
-        setSchedules(scheduleList)
-        
-        // Fetch all relevant scans for the month
-         if (studentList.length > 0) {
-            const studentRfids = studentList.map(s => s.rfid).filter(Boolean) as string[]
-            if (studentRfids.length > 0) {
-                const scansQuery = query(collection(db, 'rfid_history'), where('uid', 'in', studentRfids))
-                const scansSnapshot = await getDocs(scansQuery)
-                const allScans = scansSnapshot.docs.map(doc => doc.data() as RawScan)
-                setScans(allScans)
-            }
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+        if (!user) {
+            setError("You must be logged in.");
+            setIsLoading(false);
+            return;
         }
+        
+        setIsLoading(true);
+        try {
+            // Fetch Section Details
+            const sectionDoc = await getDoc(doc(db, 'sections', sectionId))
+            if (!sectionDoc.exists()) throw new Error('Section not found')
+            setSection({ id: sectionDoc.id, ...sectionDoc.data() } as Section)
 
-      } catch (err: any) {
-        console.error(err)
-        setError(err.message)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchData()
+            // Fetch Students in Section
+            const studentsQuery = query(collection(db, 'students'), where('sectionId', '==', sectionId))
+            const studentsSnapshot = await getDocs(studentsQuery)
+            const studentList = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student)).sort((a, b) => a.lastName.localeCompare(b.lastName))
+            setStudents(studentList)
+
+            // Fetch Section's Schedule and filter for current faculty
+            const schedulesSnapshot = await getDocs(collection(db, `sections/${sectionId}/schedules`))
+            const allSchedules = schedulesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule))
+            const facultySchedules = allSchedules.filter(s => s.facultyId === user.uid)
+            setFacultySchedules(facultySchedules);
+            
+            // Fetch all relevant scans for the month
+             if (studentList.length > 0) {
+                const studentRfids = studentList.map(s => s.rfid).filter(Boolean) as string[]
+                if (studentRfids.length > 0) {
+                    const scansQuery = query(collection(db, 'rfid_history'), where('uid', 'in', studentRfids))
+                    const scansSnapshot = await getDocs(scansQuery)
+                    const allScans = scansSnapshot.docs.map(doc => doc.data() as RawScan)
+                    setScans(allScans)
+                }
+            }
+
+        } catch (err: any) {
+            console.error(err)
+            setError(err.message)
+        } finally {
+            setIsLoading(false)
+        }
+    });
+
+    return () => unsubscribe();
   }, [sectionId])
 
   const attendanceData = useMemo(() => {
@@ -108,9 +116,9 @@ export default function SectionAttendancePage() {
 
       daysInMonth.forEach(day => {
         const dayStr = format(day, 'yyyy-MM-dd')
-        const schedulesForDay = schedules // Assuming same schedule everyday for simplicity
-        if (schedulesForDay.length === 0) {
-            attendanceByDate.set(dayStr, 'Absent') // or some other status
+        // Only check against schedules handled by this faculty
+        if (facultySchedules.length === 0) {
+            attendanceByDate.set(dayStr, 'Absent')
             return;
         }
 
@@ -119,7 +127,7 @@ export default function SectionAttendancePage() {
         let presentCount = 0
         let lateCount = 0
 
-        schedulesForDay.forEach(schedule => {
+        facultySchedules.forEach(schedule => {
             const attendingScan = scansForDay.find(s => s.classScheduleId === schedule.id)
             if (attendingScan) {
                  const scanDate = new Date(attendingScan.time.replace(' ', 'T'));
@@ -133,10 +141,13 @@ export default function SectionAttendancePage() {
             }
         })
         
+        // If there are no scans for any of the faculty's subjects, mark as absent.
         if (presentCount === 0 && lateCount === 0) {
              attendanceByDate.set(dayStr, 'Absent')
+        // If there's at least one late scan, mark the day as late.
         } else if (lateCount > 0) {
             attendanceByDate.set(dayStr, 'Late')
+        // Otherwise, they were present for at least one subject on time.
         } else {
             attendanceByDate.set(dayStr, 'Present')
         }
@@ -148,7 +159,7 @@ export default function SectionAttendancePage() {
         attendance: attendanceByDate,
       }
     })
-  }, [students, scans, schedules, daysInMonth])
+  }, [students, scans, facultySchedules, daysInMonth])
 
 
   const getCellClass = (status: AttendanceStatus | undefined) => {
@@ -167,6 +178,8 @@ export default function SectionAttendancePage() {
   if (error) {
     return <DashboardLayout role="faculty"><div className="flex flex-col items-center justify-center h-full rounded-lg border-2 border-dashed border-destructive/50 bg-destructive/10 text-destructive p-8 text-center"><AlertCircle className="h-10 w-10 mb-4" /><h2 className="text-xl font-semibold mb-2">Could Not Load Section</h2><p>{error}</p></div></DashboardLayout>
   }
+  
+  const handledSubjects = facultySchedules.map(s => s.subject).join(', ');
 
 
   return (
@@ -175,7 +188,7 @@ export default function SectionAttendancePage() {
         <CardHeader>
           <CardTitle>Attendance Sheet: {section?.name}</CardTitle>
           <CardDescription>
-            Month of {format(currentMonth, 'MMMM yyyy')}
+            {`Viewing attendance for subject(s): ${handledSubjects || 'None'}. Month of ${format(currentMonth, 'MMMM yyyy')}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
