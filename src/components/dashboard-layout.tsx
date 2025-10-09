@@ -56,6 +56,7 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
   ],
   faculty: [
     { href: "/faculty/dashboard", label: "Dashboard", icon: Home },
+    { href: "/faculty/manage-sections", label: "Manage Sections", icon: ClipboardList },
     { href: "/faculty/students", label: "Students", icon: BookUser },
   ],
   admin: [

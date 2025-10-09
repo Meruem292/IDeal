@@ -8,6 +8,7 @@ export type Student = {
   gender: "Male" | "Female" | "Other"
   birthday: string
   address: string
+  email: string
   guardian: {
     name: string
     relationship: string
@@ -47,6 +48,7 @@ export const mockStudents: Student[] = [
     gender: "Female",
     birthday: "2004-05-10",
     address: "123 University Ave, Learnington, ED 12345",
+    email: "alice.j@example.com",
     guardian: {
       name: "Jane Johnson",
       relationship: "Mother",
@@ -65,6 +67,7 @@ export const mockStudents: Student[] = [
     gender: "Male",
     birthday: "2003-08-15",
     address: "456 College Rd, Studyville, ED 54321",
+    email: "bob.w@example.com",
     guardian: {
       name: "Robert Williams Sr.",
       relationship: "Father",
@@ -83,6 +86,7 @@ export const mockStudents: Student[] = [
     gender: "Male",
     birthday: "2002-11-20",
     address: "789 Campus Dr, Knowledge City, ED 67890",
+    email: "charlie.b@example.com",
     guardian: {
       name: "Sally Brown",
       relationship: "Sister",
@@ -101,6 +105,7 @@ export const mockStudents: Student[] = [
     gender: "Female",
     birthday: "2005-02-25",
     address: "101 Library Ln, Wisdom Creek, ED 13579",
+    email: "diana.m@example.com",
     guardian: {
       name: "George Miller",
       relationship: "Father",
@@ -119,6 +124,7 @@ export const mockStudents: Student[] = [
     gender: "Male",
     birthday: "2004-09-30",
     address: "210 Academy St, Intellectburg, ED 24680",
+    email: "ethan.d@example.com",
     guardian: {
       name: "Emily Davis",
       relationship: "Mother",
