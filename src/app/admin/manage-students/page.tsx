@@ -132,11 +132,13 @@ export default function ManageStudentsPage() {
     setIsProcessing(true)
     try {
       const studentRef = doc(db, "students", selectedStudent.id);
+      const sectionIdToSave = selectedStudent.sectionId === '__UNASSIGNED__' ? null : selectedStudent.sectionId;
+
       await updateDoc(studentRef, {
         firstName: selectedStudent.firstName,
         lastName: selectedStudent.lastName,
         address: selectedStudent.address,
-        sectionId: selectedStudent.sectionId || null,
+        sectionId: sectionIdToSave,
       });
       toast({ title: "Student Updated", description: "Student details have been updated." })
       fetchStudentsAndSections() // Refresh list
@@ -388,14 +390,14 @@ export default function ManageStudentsPage() {
               <div className="grid gap-1.5">
                 <Label htmlFor="section">Section</Label>
                 <Select
-                  value={selectedStudent?.sectionId || ""}
+                  value={selectedStudent?.sectionId || "__UNASSIGNED__"}
                   onValueChange={(value) => setSelectedStudent(s => s ? { ...s, sectionId: value } : null)}
                 >
                   <SelectTrigger id="section">
                     <SelectValue placeholder="Assign a section" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    <SelectItem value="__UNASSIGNED__">Unassigned</SelectItem>
                     {sections.map(section => (
                       <SelectItem key={section.id} value={section.id}>
                         {section.name}
