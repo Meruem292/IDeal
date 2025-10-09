@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Trash2, Edit, Fingerprint, Users } from "lucide-react"
+import { Loader2, Trash2, Edit, Fingerprint, Users, Search } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, doc, deleteDoc, updateDoc, writeBatch } from "firebase/firestore"
 import {
@@ -59,10 +59,13 @@ export default function ManageStudentsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   
+  // State for the main student list search
+  const [mainSearchTerm, setMainSearchTerm] = useState("");
+  
   // State for Quick Sectioning
   const [quickSectionId, setQuickSectionId] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
-  const [searchTerm, setSearchTerm] = useState("");
+  const [quickSectionSearchTerm, setQuickSectionSearchTerm] = useState("");
 
   const { toast } = useToast()
 
@@ -164,15 +167,26 @@ export default function ManageStudentsPage() {
     setSelectedStudent(student)
     setIsDeleteDialogOpen(true)
   }
-
-  const filteredStudentsForSectioning = useMemo(() => {
-    if (!searchTerm) return students;
+  
+  const filteredStudents = useMemo(() => {
+    if (!mainSearchTerm) return students;
     return students.filter(student =>
       `${student.firstName} ${student.lastName}`
         .toLowerCase()
-        .includes(searchTerm.toLowerCase())
+        .includes(mainSearchTerm.toLowerCase()) ||
+      student.id.toLowerCase().includes(mainSearchTerm.toLowerCase())
     );
-  }, [students, searchTerm]);
+  }, [students, mainSearchTerm]);
+
+
+  const filteredStudentsForSectioning = useMemo(() => {
+    if (!quickSectionSearchTerm) return students;
+    return students.filter(student =>
+      `${student.firstName} ${student.lastName}`
+        .toLowerCase()
+        .includes(quickSectionSearchTerm.toLowerCase())
+    );
+  }, [students, quickSectionSearchTerm]);
 
   const handleStudentSelection = (studentId: string) => {
     setSelectedStudentIds(prev => {
@@ -218,7 +232,7 @@ export default function ManageStudentsPage() {
         // Refresh data and reset state
         fetchStudentsAndSections();
         setSelectedStudentIds(new Set());
-        setSearchTerm("");
+        setQuickSectionSearchTerm("");
         setQuickSectionId("");
 
     } catch (error: any) {
@@ -240,6 +254,17 @@ export default function ManageStudentsPage() {
                 </CardDescription>
                 </CardHeader>
                 <CardContent>
+                <div className="mb-4">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search by student name or ID..."
+                            value={mainSearchTerm}
+                            onChange={(e) => setMainSearchTerm(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                </div>
                 {isLoading ? (
                     <div className="flex justify-center items-center h-40">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -256,7 +281,7 @@ export default function ManageStudentsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {students.map((student) => (
+                        {filteredStudents.map((student) => (
                         <TableRow key={student.id}>
                             <TableCell className="font-medium">{`${student.lastName}, ${student.firstName}`}</TableCell>
                             <TableCell>{student.section}</TableCell>
@@ -315,8 +340,8 @@ export default function ManageStudentsPage() {
                         <Input
                             id="student-search"
                             placeholder="Search student name..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            value={quickSectionSearchTerm}
+                            onChange={(e) => setQuickSectionSearchTerm(e.target.value)}
                         />
                        </div>
                        <ScrollArea className="h-72 w-full rounded-md border">
@@ -439,3 +464,5 @@ export default function ManageStudentsPage() {
     </DashboardLayout>
   )
 }
+
+    
