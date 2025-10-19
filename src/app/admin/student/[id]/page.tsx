@@ -146,9 +146,12 @@ export default function StudentProfilePage() {
                 scanTime = format(scanDate, 'p');
 
                 const scheduleStartTime = parse(scheduleItem.startTime, 'HH:mm', selectedDate);
+                const scheduleEndTime = parse(scheduleItem.endTime, 'HH:mm', selectedDate);
                 const lateTime = new Date(scheduleStartTime.getTime() + LATE_GRACE_PERIOD_MINUTES * 60000);
 
-                if (scanDate > lateTime) {
+                if (scanDate > scheduleEndTime) {
+                    status = 'Absent';
+                } else if (scanDate > lateTime) {
                     status = 'Late';
                 } else {
                     status = 'Present';
@@ -327,4 +330,5 @@ export default function StudentProfilePage() {
     );
 }
 
+    
     

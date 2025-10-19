@@ -67,8 +67,12 @@ function AttendanceGrid({
         if (scanForDay) {
           const scanDate = new Date(scanForDay.time.replace(' ', 'T'));
           const scheduleStartTime = parse(schedule.startTime, 'HH:mm', day);
+          const scheduleEndTime = parse(schedule.endTime, 'HH:mm', day);
           const lateTime = new Date(scheduleStartTime.getTime() + LATE_GRACE_PERIOD_MINUTES * 60000);
-          if (scanDate > lateTime) {
+          
+          if (scanDate > scheduleEndTime) {
+            status = 'Absent';
+          } else if (scanDate > lateTime) {
             status = 'Late';
           } else {
             status = 'Present';
