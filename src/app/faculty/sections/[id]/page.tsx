@@ -65,18 +65,18 @@ function AttendanceGrid({
         let status: AttendanceStatus = 'Absent';
 
         if (scanForDay) {
-          const scanDate = new Date(scanForDay.time.replace(' ', 'T'));
-          const scheduleStartTime = parse(schedule.startTime, 'HH:mm', day);
-          const scheduleEndTime = parse(schedule.endTime, 'HH:mm', day);
-          const lateTime = new Date(scheduleStartTime.getTime() + LATE_GRACE_PERIOD_MINUTES * 60000);
-          
-          if (scanDate > scheduleEndTime) {
-            status = 'Absent';
-          } else if (scanDate > lateTime) {
-            status = 'Late';
-          } else {
-            status = 'Present';
-          }
+            const scanDate = new Date(scanForDay.time.replace(' ', 'T'));
+            const scheduleStartTime = parse(schedule.startTime, 'HH:mm', day);
+            const scheduleEndTime = parse(schedule.endTime, 'HH:mm', day);
+            const lateTime = new Date(scheduleStartTime.getTime() + LATE_GRACE_PERIOD_MINUTES * 60000);
+
+            if (scanDate >= scheduleStartTime && scanDate <= lateTime) {
+                status = 'Present';
+            } else if (scanDate > lateTime && scanDate <= scheduleEndTime) {
+                status = 'Late';
+            } else {
+                status = 'Absent';
+            }
         }
         attendanceByDate.set(dayStr, status);
       });
@@ -263,5 +263,7 @@ export default function SectionAttendancePage() {
     </DashboardLayout>
   )
 }
+
+    
 
     
