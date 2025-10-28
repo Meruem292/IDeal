@@ -142,6 +142,7 @@ export default function ManageStudentsPage() {
         lastName: selectedStudent.lastName,
         address: selectedStudent.address,
         sectionId: sectionIdToSave,
+        macAddress: selectedStudent.macAddress || null,
       });
       toast({ title: "Student Updated", description: "Student details have been updated." })
       fetchStudentsAndSections()
@@ -448,6 +449,17 @@ export default function ManageStudentsPage() {
                   <Input id="address" value={selectedStudent?.address || ''} onChange={(e) => setSelectedStudent(s => s ? {...s, address: e.target.value} : null)} required />
               </div>
               <div className="grid gap-1.5">
+                <Label htmlFor="macAddress">MAC Address</Label>
+                <Input 
+                    id="macAddress" 
+                    value={selectedStudent?.macAddress || ''} 
+                    onChange={(e) => setSelectedStudent(s => s ? {...s, macAddress: e.target.value} : null)} 
+                    className="font-mono"
+                    pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
+                    title="Please enter a valid MAC address format (e.g., 00:1A:2B:3C:4D:5E)"
+                />
+              </div>
+              <div className="grid gap-1.5">
                 <Label htmlFor="section">Section</Label>
                 <Select
                   value={selectedStudent?.sectionId || "__UNASSIGNED__"}
@@ -498,3 +510,5 @@ export default function ManageStudentsPage() {
     </DashboardLayout>
   )
 }
+
+    

@@ -72,7 +72,7 @@ function ProfileSkeleton() {
 
 export default function StudentProfilePage() {
   const [student, setStudent] = useState<Student | null>(null)
-  const [rfid, setRfid] = useState("")
+  const [formData, setFormData] = useState({ rfid: "", macAddress: "" });
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,7 +88,10 @@ export default function StudentProfilePage() {
           if (studentDoc.exists()) {
             const studentData = studentDoc.data() as Student
             setStudent(studentData)
-            setRfid(studentData.rfid || "")
+            setFormData({
+                rfid: studentData.rfid || "",
+                macAddress: studentData.macAddress || ""
+            })
           } else {
             setError("No student profile found for your account.")
           }
@@ -122,16 +125,20 @@ export default function StudentProfilePage() {
     setIsSaving(true)
     try {
       const studentDocRef = doc(db, "students", auth.currentUser.uid)
-      await updateDoc(studentDocRef, { rfid: rfid || null })
+      const dataToUpdate = {
+          rfid: formData.rfid.trim() || null,
+          macAddress: formData.macAddress.trim() || null
+      }
+      await updateDoc(studentDocRef, dataToUpdate)
 
       // Also update local state
       if(student) {
-        setStudent({...student, rfid: rfid || null});
+        setStudent({...student, ...dataToUpdate});
       }
 
       toast({
         title: "Profile Updated",
-        description: "Your RFID has been successfully saved.",
+        description: "Your credentials have been successfully saved.",
       })
     } catch (err: any) {
       toast({
@@ -142,6 +149,11 @@ export default function StudentProfilePage() {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
+    setFormData(prev => ({...prev, [id]: value}));
   }
 
   if (isLoading) {
@@ -247,29 +259,43 @@ export default function StudentProfilePage() {
             <Card>
               <form onSubmit={handleSubmit}>
                 <CardHeader>
-                  <CardTitle>RFID Registration</CardTitle>
+                  <CardTitle>My Credentials</CardTitle>
                   <CardDescription>
-                    Enter the ID from your RFID card to link it to your profile.
+                    Enter your device IDs to link them to your profile.
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                   <div className="grid w-full max-w-sm items-center gap-1.5">
                     <Label htmlFor="rfid">RFID Tag ID</Label>
                     <Input
                       type="text"
                       id="rfid"
                       placeholder="e.g., 766EF94D"
-                      value={rfid}
-                      onChange={(e) => setRfid(e.target.value.toUpperCase())}
+                      value={formData.rfid}
+                      onChange={(e) => setFormData(prev => ({...prev, rfid: e.target.value.toUpperCase()}))}
                       className="font-mono"
                       disabled={isSaving}
+                    />
+                  </div>
+                  <div className="grid w-full max-w-sm items-center gap-1.5">
+                    <Label htmlFor="macAddress">MAC Address</Label>
+                    <Input
+                      type="text"
+                      id="macAddress"
+                      placeholder="e.g., 00:1A:2B:3C:4D:5E"
+                      value={formData.macAddress}
+                      onChange={handleInputChange}
+                      className="font-mono"
+                      disabled={isSaving}
+                      pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
+                      title="Please enter a valid MAC address format (e.g., 00:1A:2B:3C:4D:5E)"
                     />
                   </div>
                 </CardContent>
                 <CardFooter>
                   <Button type="submit" disabled={isSaving}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save RFID
+                    Save Credentials
                   </Button>
                 </CardFooter>
               </form>
@@ -279,3 +305,5 @@ export default function StudentProfilePage() {
     </DashboardLayout>
   )
 }
+
+    
