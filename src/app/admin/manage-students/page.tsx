@@ -455,6 +455,7 @@ export default function ManageStudentsPage() {
                     value={selectedStudent?.macAddress || ''} 
                     onChange={(e) => setSelectedStudent(s => s ? {...s, macAddress: e.target.value} : null)} 
                     className="font-mono"
+                    placeholder="12:34:1A:56:78:90"
                     pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
                     title="Please enter a valid MAC address format (e.g., 00:1A:2B:3C:4D:5E)"
                 />
@@ -510,5 +511,3 @@ export default function ManageStudentsPage() {
     </DashboardLayout>
   )
 }
-
-    

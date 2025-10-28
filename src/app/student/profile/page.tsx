@@ -282,7 +282,7 @@ export default function StudentProfilePage() {
                     <Input
                       type="text"
                       id="macAddress"
-                      placeholder="e.g., 00:1A:2B:3C:4D:5E"
+                      placeholder="12:34:1A:56:78:90"
                       value={formData.macAddress}
                       onChange={handleInputChange}
                       className="font-mono"
@@ -305,5 +305,3 @@ export default function StudentProfilePage() {
     </DashboardLayout>
   )
 }
-
-    

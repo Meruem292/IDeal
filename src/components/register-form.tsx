@@ -342,7 +342,7 @@ export function RegisterForm() {
                       <Label htmlFor="mac-address">MAC Address</Label>
                       <Input 
                         id="mac-address" 
-                        placeholder="XX:XX:XX:XX:XX:XX" 
+                        placeholder="12:34:1A:56:78:90" 
                         required 
                         disabled={isLoading} 
                         value={macAddress} 
