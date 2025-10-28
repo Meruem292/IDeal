@@ -26,6 +26,7 @@ import {
   Loader2,
   ChevronLeft,
   MonitorSmartphone,
+  Signal,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
@@ -65,6 +66,7 @@ const navItems: Record<UserRole, { href: string; label: string; icon: React.Elem
     { href: "/admin/manage-scanners", label: "Manage Scanners", icon: MonitorSmartphone },
     { href: "/admin/attendance", label: "Attendance Logs", icon: History },
     { href: "/admin/rfid-history", label: "RFID History", icon: Fingerprint },
+    { href: "/admin/ping-history", label: "Ping History", icon: Signal },
   ],
 }
 
