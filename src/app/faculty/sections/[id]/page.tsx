@@ -8,7 +8,6 @@ import {
   endOfMonth,
   eachDayOfInterval,
   format,
-  isSameDay,
   parse,
 } from 'date-fns'
 import { DashboardLayout } from '@/components/dashboard-layout'
@@ -30,25 +29,39 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { db, auth } from '@/lib/firebase'
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore'
-import { Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle, SignalOff } from 'lucide-react'
 import type { Student } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 type Section = { id: string; name: string }
 type Schedule = { id: string; subject: string; startTime: string; endTime: string, facultyId?: string }
 type RawScan = { uid: string; time: string; classScheduleId: string }
+type PingLog = { macAddress: string; time: string; };
 type AttendanceStatus = 'Present' | 'Late' | 'Absent'
+type AttendanceResult = {
+    status: AttendanceStatus,
+    note?: string
+}
 
 const LATE_GRACE_PERIOD_MINUTES = 15
+const REQUIRED_PINGS = 3
 
 function AttendanceGrid({
   students,
   scans,
+  pings,
   schedule,
   daysInMonth
 }: {
   students: Student[],
   scans: RawScan[],
+  pings: PingLog[],
   schedule: Schedule,
   daysInMonth: Date[]
 }) {
@@ -56,29 +69,44 @@ function AttendanceGrid({
   const attendanceData = useMemo(() => {
     return students.map(student => {
       const studentScans = scans.filter(s => s.uid.toUpperCase() === student.rfid?.toUpperCase())
-      const attendanceByDate = new Map<string, AttendanceStatus>()
+      const studentPings = pings.filter(p => p.macAddress.toUpperCase() === student.macAddress?.toUpperCase())
+      const attendanceByDate = new Map<string, AttendanceResult>()
 
       daysInMonth.forEach(day => {
         const dayStr = format(day, 'yyyy-MM-dd')
-        const scanForDay = studentScans.find(s => s.time.startsWith(dayStr) && s.classScheduleId === schedule.id)
+        const scheduleStartTime = parse(schedule.startTime, 'HH:mm', day);
+        const scheduleEndTime = parse(schedule.endTime, 'HH:mm', day);
 
-        let status: AttendanceStatus = 'Absent';
+        const scanForSubject = studentScans.find(s => {
+            const scanTime = new Date(s.time.replace(' ', 'T'))
+            return scanTime >= scheduleStartTime && scanTime <= scheduleEndTime
+        })
 
-        if (scanForDay) {
-            const scanDate = new Date(scanForDay.time.replace(' ', 'T'));
-            const scheduleStartTime = parse(schedule.startTime, 'HH:mm', day);
-            const scheduleEndTime = parse(schedule.endTime, 'HH:mm', day);
+        let result: AttendanceResult = { status: 'Absent' };
+
+        if (scanForSubject) {
+            const scanDate = new Date(scanForSubject.time.replace(' ', 'T'));
             const lateTime = new Date(scheduleStartTime.getTime() + LATE_GRACE_PERIOD_MINUTES * 60000);
 
-            if (scanDate >= scheduleStartTime && scanDate <= lateTime) {
-                status = 'Present';
-            } else if (scanDate > lateTime && scanDate <= scheduleEndTime) {
-                status = 'Late';
+            if (scanDate <= lateTime) {
+                result.status = 'Present';
             } else {
-                status = 'Absent';
+                result.status = 'Late';
             }
         }
-        attendanceByDate.set(dayStr, status);
+        
+        // Ping validation
+        if (result.status === 'Present' || result.status === 'Late') {
+            const pingsInClass = studentPings.filter(p => {
+                const pingTime = new Date(p.time.replace(' ', 'T'));
+                return pingTime >= scheduleStartTime && pingTime <= scheduleEndTime;
+            });
+            if (pingsInClass.length < REQUIRED_PINGS) {
+                result = { status: 'Absent', note: 'Failure to ping' };
+            }
+        }
+        
+        attendanceByDate.set(dayStr, result);
       });
 
       return {
@@ -87,7 +115,7 @@ function AttendanceGrid({
         attendance: attendanceByDate,
       }
     })
-  }, [students, scans, schedule, daysInMonth])
+  }, [students, scans, pings, schedule, daysInMonth])
   
   const getCellClass = (status: AttendanceStatus | undefined) => {
     switch (status) {
@@ -100,6 +128,7 @@ function AttendanceGrid({
 
   return (
     <div className="overflow-x-auto border rounded-lg">
+      <TooltipProvider>
        <Table className="min-w-full">
           <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -120,12 +149,17 @@ function AttendanceGrid({
                   <TableCell className="sticky left-0 bg-background z-10 font-medium whitespace-nowrap">{studentName}</TableCell>
                   {daysInMonth.map(day => {
                   const dayStr = format(day, 'yyyy-MM-dd')
-                  const status = attendance.get(dayStr)
+                  const result = attendance.get(dayStr)
                   return (
-                      <TableCell key={dayStr} className={cn("text-center p-0 h-16", getCellClass(status))}>
-                         {status && (
+                      <TableCell key={dayStr} className={cn("text-center p-0 h-16", getCellClass(result?.status))}>
+                         {result && (
                              <div className="w-full h-full flex items-center justify-center font-semibold text-xs">
-                              {/* We can put content here if needed later */}
+                              {result.note && (
+                                <Tooltip>
+                                  <TooltipTrigger><SignalOff className="h-4 w-4 text-red-700" /></TooltipTrigger>
+                                  <TooltipContent><p>{result.note}</p></TooltipContent>
+                                </Tooltip>
+                              )}
                              </div>
                          )}
                       </TableCell>
@@ -135,6 +169,7 @@ function AttendanceGrid({
               ))}
           </TableBody>
       </Table>
+     </TooltipProvider>
     </div>
   )
 }
@@ -148,6 +183,7 @@ export default function SectionAttendancePage() {
   const [students, setStudents] = useState<Student[]>([])
   const [facultySchedules, setFacultySchedules] = useState<Schedule[]>([])
   const [scans, setScans] = useState<RawScan[]>([])
+  const [pings, setPings] = useState<PingLog[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -186,14 +222,20 @@ export default function SectionAttendancePage() {
             const facultySchedules = allSchedules.filter(s => s.facultyId === user.uid)
             setFacultySchedules(facultySchedules);
             
-            // Fetch all relevant scans for the month
-             if (studentList.length > 0) {
+            if (studentList.length > 0) {
+                // Fetch all relevant scans for the month
                 const studentRfids = studentList.map(s => s.rfid).filter(Boolean) as string[]
                 if (studentRfids.length > 0) {
                     const scansQuery = query(collection(db, 'rfid_history'), where('uid', 'in', studentRfids))
                     const scansSnapshot = await getDocs(scansQuery)
-                    const allScans = scansSnapshot.docs.map(doc => doc.data() as RawScan)
-                    setScans(allScans)
+                    setScans(scansSnapshot.docs.map(doc => doc.data() as RawScan))
+                }
+                 // Fetch all relevant pings for the month
+                const studentMacs = studentList.map(s => s.macAddress).filter(Boolean) as string[]
+                if (studentMacs.length > 0) {
+                    const pingsQuery = query(collection(db, 'ping_history'), where('macAddress', 'in', studentMacs))
+                    const pingsSnapshot = await getDocs(pingsQuery);
+                    setPings(pingsSnapshot.docs.map(doc => doc.data() as PingLog));
                 }
             }
 
@@ -242,6 +284,7 @@ export default function SectionAttendancePage() {
                   <AttendanceGrid 
                     students={students}
                     scans={scans}
+                    pings={pings}
                     schedule={schedule}
                     daysInMonth={daysInMonth}
                   />
@@ -257,13 +300,10 @@ export default function SectionAttendancePage() {
                 <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-green-100 border"></div><span className="text-xs">Present</span></div>
                 <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-yellow-100 border"></div><span className="text-xs">Late</span></div>
                 <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-red-100 border"></div><span className="text-xs">Absent</span></div>
+                <div className="flex items-center gap-2"><SignalOff className="h-4 w-4 text-red-700"/> <span className="text-xs">Absent (No Ping)</span></div>
            </div>
         </CardContent>
       </Card>
     </DashboardLayout>
   )
 }
-
-    
-
-    
