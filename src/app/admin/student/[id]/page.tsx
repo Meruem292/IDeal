@@ -194,11 +194,9 @@ export default function StudentProfilePage() {
                 } else {
                     status = 'Present';
                 }
-            }
-            
-            // Ping validation logic
-            if (status === 'Present' || status === 'Late') {
-                 const pingsInClass = pingsForDay.filter(ping => {
+
+                // Ping validation logic
+                const pingsInClass = pingsForDay.filter(ping => {
                     const pingDate = parseDateTime(ping.time)!;
                     return pingDate >= scheduleStartTime && pingDate <= scheduleEndTime;
                 });

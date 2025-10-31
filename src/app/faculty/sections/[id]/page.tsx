@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from 'react'
@@ -94,10 +95,8 @@ function AttendanceGrid({
             } else {
                 result.status = 'Present';
             }
-        }
-        
-        // Ping validation
-        if (result.status === 'Present' || result.status === 'Late') {
+
+            // Ping validation
             const pingsInClass = studentPings.filter(p => {
                 const pingTime = new Date(p.time.replace(' ', 'T'));
                 return pingTime >= scheduleStartTime && pingTime <= scheduleEndTime;
