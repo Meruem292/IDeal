@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from 'react'
@@ -29,7 +28,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { db, auth } from '@/lib/firebase'
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore'
-import { Loader2, AlertCircle, SignalOff } from 'lucide-react'
+import { Loader2, AlertCircle, SignalZero } from 'lucide-react'
 import type { Student } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import {
@@ -69,7 +68,7 @@ function AttendanceGrid({
   const attendanceData = useMemo(() => {
     return students.map(student => {
       const studentScans = scans.filter(s => s.uid.toUpperCase() === student.rfid?.toUpperCase())
-      const studentPings = pings.filter(p => p.macAddress.toUpperCase() === student.macAddress?.toUpperCase())
+      const studentPings = pings.filter(p => p.macAddress?.toUpperCase() === student.macAddress?.toUpperCase())
       const attendanceByDate = new Map<string, AttendanceResult>()
 
       daysInMonth.forEach(day => {
@@ -87,11 +86,13 @@ function AttendanceGrid({
         if (scanForSubject) {
             const scanDate = new Date(scanForSubject.time.replace(' ', 'T'));
             const lateTime = new Date(scheduleStartTime.getTime() + LATE_GRACE_PERIOD_MINUTES * 60000);
-
-            if (scanDate <= lateTime) {
-                result.status = 'Present';
-            } else {
+            
+            if (scanDate > scheduleEndTime) {
+                 result.status = 'Absent';
+            } else if (scanDate > lateTime) {
                 result.status = 'Late';
+            } else {
+                result.status = 'Present';
             }
         }
         
@@ -102,7 +103,7 @@ function AttendanceGrid({
                 return pingTime >= scheduleStartTime && pingTime <= scheduleEndTime;
             });
             if (pingsInClass.length < REQUIRED_PINGS) {
-                result = { status: 'Absent', note: 'Failure to ping' };
+                result = { status: 'Absent', note: `Failure to ping (${pingsInClass.length}/${REQUIRED_PINGS} pings recorded).` };
             }
         }
         
@@ -156,7 +157,7 @@ function AttendanceGrid({
                              <div className="w-full h-full flex items-center justify-center font-semibold text-xs">
                               {result.note && (
                                 <Tooltip>
-                                  <TooltipTrigger><SignalOff className="h-4 w-4 text-red-700" /></TooltipTrigger>
+                                  <TooltipTrigger><SignalZero className="h-4 w-4 text-red-700" /></TooltipTrigger>
                                   <TooltipContent><p>{result.note}</p></TooltipContent>
                                 </Tooltip>
                               )}
@@ -226,14 +227,14 @@ export default function SectionAttendancePage() {
                 // Fetch all relevant scans for the month
                 const studentRfids = studentList.map(s => s.rfid).filter(Boolean) as string[]
                 if (studentRfids.length > 0) {
-                    const scansQuery = query(collection(db, 'rfid_history'), where('uid', 'in', studentRfids))
+                    const scansQuery = query(collection(db, 'rfid_history'), where('uid', 'in', studentRfids.map(rfid => rfid.toUpperCase())))
                     const scansSnapshot = await getDocs(scansQuery)
                     setScans(scansSnapshot.docs.map(doc => doc.data() as RawScan))
                 }
                  // Fetch all relevant pings for the month
                 const studentMacs = studentList.map(s => s.macAddress).filter(Boolean) as string[]
                 if (studentMacs.length > 0) {
-                    const pingsQuery = query(collection(db, 'ping_history'), where('macAddress', 'in', studentMacs))
+                    const pingsQuery = query(collection(db, 'ping_history'), where('macAddress', 'in', studentMacs.map(mac => mac.toUpperCase())))
                     const pingsSnapshot = await getDocs(pingsQuery);
                     setPings(pingsSnapshot.docs.map(doc => doc.data() as PingLog));
                 }
@@ -300,7 +301,7 @@ export default function SectionAttendancePage() {
                 <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-green-100 border"></div><span className="text-xs">Present</span></div>
                 <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-yellow-100 border"></div><span className="text-xs">Late</span></div>
                 <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-red-100 border"></div><span className="text-xs">Absent</span></div>
-                <div className="flex items-center gap-2"><SignalOff className="h-4 w-4 text-red-700"/> <span className="text-xs">Absent (No Ping)</span></div>
+                <div className="flex items-center gap-2"><SignalZero className="h-4 w-4 text-red-700"/> <span className="text-xs">Absent (No Ping)</span></div>
            </div>
         </CardContent>
       </Card>

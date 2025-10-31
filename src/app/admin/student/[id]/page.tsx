@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card"
 import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
-import { Loader2, AlertCircle, CalendarClock, BookOpen, CheckCircle, XCircle, Clock, SignalOff } from "lucide-react"
+import { Loader2, AlertCircle, CalendarClock, BookOpen, CheckCircle, XCircle, Clock, SignalZero } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore"
 import type { Student } from "@/lib/mock-data"
@@ -185,11 +185,14 @@ export default function StudentProfilePage() {
                 scanTime = format(scanDate, 'p');
 
                 const lateTime = new Date(scheduleStartTime.getTime() + LATE_GRACE_PERIOD_MINUTES * 60000);
-
-                if (scanDate <= lateTime) {
-                    status = 'Present';
-                } else {
+                
+                if (scanDate > scheduleEndTime) {
+                    status = 'Absent';
+                    scanTime = null;
+                } else if (scanDate > lateTime) {
                     status = 'Late';
+                } else {
+                    status = 'Present';
                 }
             }
             
@@ -247,7 +250,7 @@ export default function StudentProfilePage() {
         Present: { icon: CheckCircle, bgColor: 'bg-green-100/80 dark:bg-green-900/40', timeColor: 'text-green-700 dark:text-green-400', labelColor: 'text-green-600 dark:text-green-500', label: 'Present' },
         Late: { icon: Clock, bgColor: 'bg-yellow-100/80 dark:bg-yellow-900/40', timeColor: 'text-yellow-700 dark:text-yellow-400', labelColor: 'text-yellow-600 dark:text-yellow-500', label: 'Late' },
         Absent: { icon: XCircle, bgColor: 'bg-red-100/60 dark:bg-red-900/30', timeColor: '', labelColor: 'text-red-600 dark:text-red-500', label: 'Absent' },
-        "Failure to ping": { icon: SignalOff, bgColor: 'bg-red-100/60 dark:bg-red-900/30', timeColor: 'text-red-700 dark:text-red-400', labelColor: 'text-red-600 dark:text-red-500', label: 'Absent (No Ping)' },
+        "Failure to ping": { icon: SignalZero, bgColor: 'bg-red-100/60 dark:bg-red-900/30', timeColor: 'text-red-700 dark:text-red-400', labelColor: 'text-red-600 dark:text-red-500', label: 'Absent (No Ping)' },
     }
 
     return (
@@ -345,3 +348,5 @@ export default function StudentProfilePage() {
         </DashboardLayout>
     );
 }
+
+    
