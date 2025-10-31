@@ -20,10 +20,14 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, query, orderBy } from "firebase/firestore"
-import { Loader2 } from "lucide-react"
+import { collection, getDocs, query, where } from "firebase/firestore"
+import { Loader2, Calendar as CalendarIcon, Filter } from "lucide-react"
 import type { Student } from "@/lib/mock-data"
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
+import { DateRange } from "react-day-picker"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { cn } from "@/lib/utils"
 
 type AttendanceLog = {
     id: string;
@@ -44,11 +48,12 @@ const formatScanTime = (time: string) => {
     }
 };
 
-
 export default function AttendancePage() {
-    const [logs, setLogs] = useState<AttendanceLog[]>([]);
+    const [allLogs, setAllLogs] = useState<AttendanceLog[]>([]);
+    const [filteredLogs, setFilteredLogs] = useState<AttendanceLog[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const ROWS_PER_PAGE = 10;
 
     useEffect(() => {
@@ -82,7 +87,8 @@ export default function AttendancePage() {
 
                 attendanceList.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
-                setLogs(attendanceList);
+                setAllLogs(attendanceList);
+                setFilteredLogs(attendanceList);
 
             } catch (error: any) {
                  if (error.message.includes("requires an index")) {
@@ -96,29 +102,90 @@ export default function AttendancePage() {
         }
         fetchAttendance();
     }, []);
+    
+    useEffect(() => {
+        setCurrentPage(1);
+        if (!dateRange?.from) {
+            setFilteredLogs(allLogs);
+            return;
+        }
 
-    const totalPages = Math.ceil(logs.length / ROWS_PER_PAGE);
+        const fromDate = startOfDay(dateRange.from);
+        const toDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
+
+        const filtered = allLogs.filter(log => {
+            const logDate = new Date(log.time);
+            return logDate >= fromDate && logDate <= toDate;
+        });
+        setFilteredLogs(filtered);
+
+    }, [dateRange, allLogs]);
+
+    const totalPages = Math.ceil(filteredLogs.length / ROWS_PER_PAGE);
     const paginatedLogs = useMemo(() => {
         const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
         const endIndex = startIndex + ROWS_PER_PAGE;
-        return logs.slice(startIndex, endIndex);
-    }, [logs, currentPage]);
+        return filteredLogs.slice(startIndex, endIndex);
+    }, [filteredLogs, currentPage]);
 
     return (
         <DashboardLayout role="admin">
             <Card>
                 <CardHeader>
-                    <CardTitle>Attendance Log</CardTitle>
-                    <CardDescription>
-                        A real-time log of all RFID scans from the central history.
-                    </CardDescription>
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                        <div>
+                            <CardTitle>Attendance Log</CardTitle>
+                            <CardDescription>
+                                A real-time log of all RFID scans from the central history.
+                            </CardDescription>
+                        </div>
+                         <div className="flex items-center gap-2">
+                             <Popover>
+                                <PopoverTrigger asChild>
+                                <Button
+                                    id="date"
+                                    variant={"outline"}
+                                    className={cn(
+                                    "w-[300px] justify-start text-left font-normal",
+                                    !dateRange && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {dateRange?.from ? (
+                                    dateRange.to ? (
+                                        <>
+                                        {format(dateRange.from, "LLL dd, y")} -{" "}
+                                        {format(dateRange.to, "LLL dd, y")}
+                                        </>
+                                    ) : (
+                                        format(dateRange.from, "LLL dd, y")
+                                    )
+                                    ) : (
+                                    <span>Pick a date range</span>
+                                    )}
+                                </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="end">
+                                <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={dateRange?.from}
+                                    selected={dateRange}
+                                    onSelect={setDateRange}
+                                    numberOfMonths={2}
+                                />
+                                </PopoverContent>
+                            </Popover>
+                             <Button variant="outline" onClick={() => setDateRange(undefined)} disabled={!dateRange}>Clear</Button>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
                          <div className="flex justify-center items-center h-40">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                         </div>
-                    ) : logs.length > 0 ? (
+                    ) : filteredLogs.length > 0 ? (
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -139,7 +206,7 @@ export default function AttendancePage() {
                         </Table>
                     ) : (
                          <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
-                            <p>No attendance records found in the system.</p>
+                            <p>No attendance records found for the selected criteria.</p>
                         </div>
                     )}
                 </CardContent>
